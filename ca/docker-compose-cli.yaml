@@ -1,0 +1,166 @@
+version: '2'
+
+services:
+
+  orderer:
+    container_name: orderer
+    image: hyperledger/fabric-ca-orderer
+    environment:
+      - ORDERER_GENERAL_LISTENADDRESS=0.0.0.0
+      - ORDERER_GENERAL_GENESISMETHOD=file
+      - ORDERER_GENERAL_GENESISFILE=/data/genesis.block
+      - ORDERER_GENERAL_LOCALMSPID=ordererOrgMSP
+      - ORDERER_GENERAL_LOCALMSPDIR=/data/orgs/ordererOrg/orderer/msp
+      - ORDERER_GENERAL_TLS_ENABLED=true
+      - ORDERER_GENERAL_TLS_PRIVATEKEY=/data/orgs/ordererOrg/orderer/tls/server.key
+      - ORDERER_GENERAL_TLS_CERTIFICATE=/data/orgs/ordererOrg/orderer/tls/server.crt
+      - ORDERER_GENERAL_TLS_ROOTCAS=[/data/ordererOrg-ca-chain.pem]
+      # 客户端发送请求需要tls证书验证
+      #- ORDERER_GENERAL_TLS_CLIENTAUTHREQUIRED=true
+      #- ORDERER_GENERAL_TLS_CLIENTROOTCAS=[/data/ordererOrg-ca-chain.pem]
+      - ORDERER_GENERAL_LOGLEVEL=debug
+      - ORDERER_DEBUG_BROADCASTTRACEDIR=data/logs
+    command: orderer
+    volumes:
+      - ./data:/data
+
+  peer0-peerOrg1:
+    container_name: peer0-peerOrg1
+    image: hyperledger/fabric-ca-peer
+    environment:
+      - CORE_PEER_ID=peer0-peerOrg1
+      - CORE_PEER_ADDRESS=peer0-peerOrg1:7051
+      - CORE_PEER_LOCALMSPID=peerOrg1MSP
+      - CORE_PEER_MSPCONFIGPATH=/data/orgs/peerOrg1/peer0/msp
+      - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
+      # 启动chaincode容器的网络
+      - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=ca_default
+      - CORE_LOGGING_LEVEL=DEBUG
+      - CORE_PEER_TLS_ENABLED=true
+      # peer服务自身启动使用的tls证书
+      - CORE_PEER_TLS_CERT_FILE=/data/orgs/peerOrg1/peer0/tls/server.crt
+      - CORE_PEER_TLS_KEY_FILE=/data/orgs/peerOrg1/peer0/tls/server.key
+      - CORE_PEER_TLS_ROOTCERT_FILE=/data/peerOrg1-ca-chain.pem
+      # 客户端请求的tls验证证书
+      #- CORE_PEER_TLS_CLIENTAUTHREQUIRED=true
+      #- CORE_PEER_TLS_CLIENTROOTCAS_FILES=/data/peerOrg1-ca-chain.pem
+      #- CORE_PEER_TLS_CLIENTCERT_FILE=/data/tls/peer0-peerOrg1-clientauth.crt
+      #- CORE_PEER_TLS_CLIENTKEY_FILE=/data/tls/peer0-peerOrg1-clientauth.key
+      - CORE_PEER_GOSSIP_USELEADERELECTION=true
+      - CORE_PEER_GOSSIP_ORGLEADER=false
+      - CORE_PEER_GOSSIP_EXTERNALENDPOINT=peer0-peerOrg1:7051
+      - CORE_PEER_GOSSIP_SKIPHANDSHAKE=true
+    working_dir: /opt/gopath/src/github.com/hyperledger/fabric/peer
+    command: peer node start
+    volumes:
+      - ./data:/data
+      - /var/run:/host/var/run
+
+  peer1-peerOrg1:
+    container_name: peer1-peerOrg1
+    image: hyperledger/fabric-ca-peer
+    environment:
+      - CORE_PEER_ID=peer1-peerOrg1
+      - CORE_PEER_ADDRESS=peer1-peerOrg1:7051
+      - CORE_PEER_LOCALMSPID=peerOrg1MSP
+      - CORE_PEER_MSPCONFIGPATH=/data/orgs/peerOrg1/peer1/msp
+      - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
+      - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=ca_default
+      - CORE_LOGGING_LEVEL=DEBUG
+      - CORE_PEER_TLS_ENABLED=true
+      - CORE_PEER_TLS_CERT_FILE=/data/orgs/peerOrg1/peer1/tls/server.crt
+      - CORE_PEER_TLS_KEY_FILE=/data/orgs/peerOrg1/peer1/tls/server.key
+      - CORE_PEER_TLS_ROOTCERT_FILE=/data/peerOrg1-ca-chain.pem
+      #- CORE_PEER_TLS_CLIENTAUTHREQUIRED=true
+      #- CORE_PEER_TLS_CLIENTROOTCAS_FILES=/data/peerOrg1-ca-chain.pem
+      #- CORE_PEER_TLS_CLIENTCERT_FILE=/data/tls/peer1-peerOrg1-clientauth.crt
+      #- CORE_PEER_TLS_CLIENTKEY_FILE=/data/tls/peer1-peerOrg1-clientauth.key
+      - CORE_PEER_GOSSIP_USELEADERELECTION=true
+      - CORE_PEER_GOSSIP_ORGLEADER=false
+      - CORE_PEER_GOSSIP_EXTERNALENDPOINT=peer1-peerOrg1:7051
+      - CORE_PEER_GOSSIP_SKIPHANDSHAKE=true
+      # 其他节点先与锚节点建立gossip通道
+      - CORE_PEER_GOSSIP_BOOTSTRAP=peer0-peerOrg1:7051
+    working_dir: /opt/gopath/src/github.com/hyperledger/fabric/peer
+    command: peer node start
+    #command: sleep 99999
+    volumes:
+      - ./data:/data
+      - /var/run:/host/var/run
+
+  peer0-peerOrg2:
+    container_name: peer0-peerOrg2
+    image: hyperledger/fabric-ca-peer
+    environment:
+      - CORE_PEER_ID=peer0-peerOrg2
+      - CORE_PEER_ADDRESS=peer0-peerOrg2:7051
+      - CORE_PEER_LOCALMSPID=peerOrg2MSP
+      - CORE_PEER_MSPCONFIGPATH=/data/orgs/peerOrg2/peer0/msp
+      - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
+      - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=ca_default
+      - CORE_LOGGING_LEVEL=DEBUG
+      - CORE_PEER_TLS_ENABLED=true
+      - CORE_PEER_TLS_CERT_FILE=/data/orgs/peerOrg2/peer0/tls/server.crt
+      - CORE_PEER_TLS_KEY_FILE=/data/orgs/peerOrg2/peer0/tls/server.key
+      - CORE_PEER_TLS_ROOTCERT_FILE=/data/peerOrg2-ca-chain.pem
+      #- CORE_PEER_TLS_CLIENTAUTHREQUIRED=true
+      #- CORE_PEER_TLS_CLIENTROOTCAS_FILES=/data/peerOrg2-ca-chain.pem
+      #- CORE_PEER_TLS_CLIENTCERT_FILE=/data/tls/peer0-peerOrg2-clientauth.crt
+      #- CORE_PEER_TLS_CLIENTKEY_FILE=/data/tls/peer0-peerOrg2-clientauth.key
+      - CORE_PEER_GOSSIP_USELEADERELECTION=true
+      - CORE_PEER_GOSSIP_ORGLEADER=false
+      - CORE_PEER_GOSSIP_EXTERNALENDPOINT=peer0-peerOrg2:7051
+      - CORE_PEER_GOSSIP_SKIPHANDSHAKE=true
+    working_dir: /opt/gopath/src/github.com/hyperledger/fabric/peer
+    command: peer node start
+    volumes:
+      - ./data:/data
+      - /var/run:/host/var/run
+
+  peer1-peerOrg2:
+    container_name: peer1-peerOrg2
+    image: hyperledger/fabric-ca-peer
+    environment:
+      - CORE_PEER_ID=peer1-peerOrg2
+      - CORE_PEER_ADDRESS=peer1-peerOrg2:7051
+      - CORE_PEER_LOCALMSPID=peerOrg2MSP
+      - CORE_PEER_MSPCONFIGPATH=/data/orgs/peerOrg2/peer1/msp
+      - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
+      - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=ca_default
+      - CORE_LOGGING_LEVEL=DEBUG
+      - CORE_PEER_TLS_ENABLED=true
+      - CORE_PEER_TLS_CERT_FILE=/data/orgs/peerOrg2/peer1/tls/server.crt
+      - CORE_PEER_TLS_KEY_FILE=/data/orgs/peerOrg2/peer1/tls/server.key
+      - CORE_PEER_TLS_ROOTCERT_FILE=/data/peerOrg2-ca-chain.pem
+      #- CORE_PEER_TLS_CLIENTAUTHREQUIRED=true
+      #- CORE_PEER_TLS_CLIENTROOTCAS_FILES=/data/peerOrg2-ca-chain.pem
+      #- CORE_PEER_TLS_CLIENTCERT_FILE=/data/tls/peer1-peerOrg2-clientauth.crt
+      #- CORE_PEER_TLS_CLIENTKEY_FILE=/data/tls/peer1-peerOrg2-clientauth.key
+      - CORE_PEER_GOSSIP_USELEADERELECTION=true
+      - CORE_PEER_GOSSIP_ORGLEADER=false
+      - CORE_PEER_GOSSIP_EXTERNALENDPOINT=peer1-peerOrg2:7051
+      - CORE_PEER_GOSSIP_SKIPHANDSHAKE=true
+      - CORE_PEER_GOSSIP_BOOTSTRAP=peer0-peerOrg2:7051
+    working_dir: /opt/gopath/src/github.com/hyperledger/fabric/peer
+    command: peer node start
+    volumes:
+      - ./scripts:/scripts
+      - ./data:/data
+      - /var/run:/host/var/run
+
+  cli:
+    container_name: cli
+    image: hyperledger/fabric-ca-tools
+    environment:
+      - GOPATH=/opt/gopath
+    command: /bin/bash -c '/scripts/prepare.sh;sleep 99999'
+    volumes:
+      - ./scripts:/scripts
+      - ./data:/data
+      - ./examples:/opt/gopath/src/github.com/
+    depends_on:
+      - orderer
+      - peer0-peerOrg1
+      - peer1-peerOrg1
+      - peer0-peerOrg2
+      - peer1-peerOrg2

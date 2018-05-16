@@ -1,0 +1,69 @@
+version: '2'
+
+services:
+
+  ica-ordererOrg:
+    container_name: ica-ordererOrg
+    image: hyperledger/fabric-ca
+    command: /bin/bash -c '/scripts/start-intermediate-ca.sh ordererOrg 2>&1'
+    environment:
+      - FABRIC_CA_SERVER_HOME=/etc/hyperledger/fabric-ca
+      - FABRIC_CA_SERVER_CA_NAME=ica-ordererOrg
+      - FABRIC_CA_SERVER_INTERMEDIATE_TLS_CERTFILES=/data/ordererOrg-ca-cert.pem
+      - FABRIC_CA_SERVER_CSR_HOSTS=ica-ordererOrg
+      - FABRIC_CA_SERVER_TLS_ENABLED=true
+      - FABRIC_CA_SERVER_DEBUG=true
+      - TARGET_CHAINFILE=/data/ordererOrg-ca-chain.pem
+      - PARENT_URL=https://admin:adminpw@rca-ordererOrg:7054
+    volumes:
+      - ./scripts:/scripts
+      - ./data:/data
+
+  ica-peerOrg1:
+    container_name: ica-peerOrg1
+    image: hyperledger/fabric-ca
+    command: /bin/bash -c '/scripts/start-intermediate-ca.sh peerOrg1 2>&1'
+    environment:
+      - FABRIC_CA_SERVER_HOME=/etc/hyperledger/fabric-ca
+      - FABRIC_CA_SERVER_CA_NAME=ica-peerOrg1
+      - FABRIC_CA_SERVER_INTERMEDIATE_TLS_CERTFILES=/data/peerOrg1-ca-cert.pem
+      - FABRIC_CA_SERVER_CSR_HOSTS=ica-peerOrg1
+      - FABRIC_CA_SERVER_TLS_ENABLED=true
+      - FABRIC_CA_SERVER_DEBUG=true
+      - TARGET_CHAINFILE=/data/peerOrg1-ca-chain.pem
+      - PARENT_URL=https://admin:adminpw@rca-peerOrg1:7054
+    volumes:
+      - ./scripts:/scripts
+      - ./data:/data
+
+  ica-peerOrg2:
+    container_name: ica-peerOrg2
+    image: hyperledger/fabric-ca
+    command: /bin/bash -c '/scripts/start-intermediate-ca.sh peerOrg2 2>&1'
+    environment:
+      - FABRIC_CA_SERVER_HOME=/etc/hyperledger/fabric-ca
+      - FABRIC_CA_SERVER_CA_NAME=ica-peerOrg2
+      - FABRIC_CA_SERVER_INTERMEDIATE_TLS_CERTFILES=/data/peerOrg2-ca-cert.pem
+      - FABRIC_CA_SERVER_CSR_HOSTS=ica-peerOrg2
+      - FABRIC_CA_SERVER_TLS_ENABLED=true
+      - FABRIC_CA_SERVER_DEBUG=true
+      - TARGET_CHAINFILE=/data/peerOrg2-ca-chain.pem
+      - PARENT_URL=https://admin:adminpw@rca-peerOrg2:7054
+    volumes:
+      - ./scripts:/scripts
+      - ./data:/data
+
+  setup:
+    container_name: setup
+    image: hyperledger/fabric-ca-tools
+    command: sleep 999999
+    command: /bin/bash -c '/scripts/setup.sh;sleep 99999'
+    environment:
+      - FABRIC_CFG_PATH=/etc/hyperledger/fabric
+    volumes:
+      - ./scripts:/scripts
+      - ./data:/data
+    depends_on:
+      - ica-ordererOrg
+      - ica-peerOrg1
+      - ica-peerOrg2

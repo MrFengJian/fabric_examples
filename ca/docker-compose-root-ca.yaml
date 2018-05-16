@@ -1,0 +1,48 @@
+version: '2'
+
+services:
+
+  rca-ordererOrg:
+    container_name: rca-ordererOrg
+    image: hyperledger/fabric-ca
+    command: /bin/bash -c '/scripts/start-root-ca.sh 2>&1'
+    environment:
+      - FABRIC_CA_SERVER_HOME=/etc/hyperledger/fabric-ca
+      - FABRIC_CA_SERVER_TLS_ENABLED=true
+      - FABRIC_CA_SERVER_CSR_CN=rca-ordererOrg
+      - FABRIC_CA_SERVER_CSR_HOSTS=rca-ordererOrg
+      - FABRIC_CA_SERVER_DEBUG=true
+      - TARGET_CERTFILE=/data/ordererOrg-ca-cert.pem
+    volumes:
+      - ./scripts:/scripts
+      - ./data:/data
+
+  rca-peerOrg1:
+    container_name: rca-peerOrg1
+    image: hyperledger/fabric-ca
+    command: /bin/bash -c '/scripts/start-root-ca.sh 2>&1'
+    environment:
+      - FABRIC_CA_SERVER_HOME=/etc/hyperledger/fabric-ca
+      - FABRIC_CA_SERVER_TLS_ENABLED=true
+      - FABRIC_CA_SERVER_CSR_CN=rca-peerOrg1
+      - FABRIC_CA_SERVER_CSR_HOSTS=rca-peerOrg1
+      - FABRIC_CA_SERVER_DEBUG=true
+      - TARGET_CERTFILE=/data/peerOrg1-ca-cert.pem
+    volumes:
+      - ./scripts:/scripts
+      - ./data:/data
+
+  rca-peerOrg2:
+    container_name: rca-peerOrg2
+    image: hyperledger/fabric-ca
+    command: /bin/bash -c '/scripts/start-root-ca.sh 2>&1'
+    environment:
+      - FABRIC_CA_SERVER_HOME=/etc/hyperledger/fabric-ca
+      - FABRIC_CA_SERVER_TLS_ENABLED=true
+      - FABRIC_CA_SERVER_CSR_CN=rca-peerOrg2
+      - FABRIC_CA_SERVER_CSR_HOSTS=rca-peerOrg2
+      - FABRIC_CA_SERVER_DEBUG=true
+      - TARGET_CERTFILE=/data/peerOrg2-ca-cert.pem
+    volumes:
+      - ./scripts:/scripts
+      - ./data:/data
