@@ -1,0 +1,16 @@
+[
+  {
+    "name": "collection1",
+    "policy": "OR('org1.member')",
+    "requiredPeerCount": 0,
+    "maxPeerCount": 3,
+    "blockToLive": 1000000
+  },
+  {
+    "name": "collection2",
+    "policy": "OR('org2.member')",
+    "requiredPeerCount": 0,
+    "maxPeerCount": 3,
+    "blockToLive": 3
+  }
+]
