@@ -18,3 +18,9 @@ fabric网络环境搭建的例子，所使用的yaml和各种配置。
 
 使用说明可参考[基于fabric-ca手动搭建fabric网络](https://swordboy.github.io/build_fabric_network_with_fabric_ca.html)
 
+
+
+# isolated_network
+
+通过docker，给每个组织建立单独的隔离网络，仅anchor节点可以跨组织互通，fabric网络能够正常工作。
+
