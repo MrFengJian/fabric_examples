@@ -1,0 +1,159 @@
+# Copyright IBM Corp. All Rights Reserved.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+version: "2"
+
+services:
+  zookeeper:
+    image: hyperledger/fabric-zookeeper
+    container_name: zookeeper
+
+  kafka1:
+    image: hyperledger/fabric-kafka
+    container_name: kafka1
+    environment:
+      - KAFKA_ADVERTISED_HOST_NAME=kafka1
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_SSL_KEYSTORE_LOCATION=/var/private/ssl/kafka.server.keystore.jks
+      - KAFKA_SSL_KEYSTORE_PASSWORD=test1234
+      - KAFKA_SSL_KEY_PASSWORD=test1234
+      - KAFKA_SSL_TRUSTSTORE_LOCATION=/var/private/ssl/kafka.server.truststore.jks
+      - KAFKA_SSL_TRUSTSTORE_PASSWORD=test1234
+      - KAFKA_LISTENERS=PLAINTEXT://kafka1:9092,SSL://kafka1:9093
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka1:9092,SSL://kafka1:9093
+      - KAFKA_MESSAGE_MAX_BYTES=102760448
+      - KAFKA_REPLICA_FETCH_MAX_BYTES=102760448
+      - KAFKA_UNCLEAN_LEADER_ELECTION_ENABLE=false
+    volumes:
+      - ./kafka-artifacts/kafka1.keystore.jks:/var/private/ssl/kafka.server.keystore.jks
+      - ./kafka-artifacts/kafka1.truststore.jks:/var/private/ssl/kafka.server.truststore.jks
+    depends_on:
+      - zookeeper
+
+  kafka2:
+    image: hyperledger/fabric-kafka
+    container_name: kafka2
+    environment:
+      - KAFKA_ADVERTISED_HOST_NAME=kafka2
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_SSL_KEYSTORE_LOCATION=/var/private/ssl/kafka.server.keystore.jks
+      - KAFKA_SSL_KEYSTORE_PASSWORD=test1234
+      - KAFKA_SSL_KEY_PASSWORD=test1234
+      - KAFKA_SSL_TRUSTSTORE_LOCATION=/var/private/ssl/kafka.server.truststore.jks
+      - KAFKA_SSL_TRUSTSTORE_PASSWORD=test1234
+      - KAFKA_LISTENERS=PLAINTEXT://kafka2:9092,SSL://kafka2:9093
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka2:9092,SSL://kafka2:9093
+      - KAFKA_MESSAGE_MAX_BYTES=102760448
+      - KAFKA_REPLICA_FETCH_MAX_BYTES=102760448
+      - KAFKA_UNCLEAN_LEADER_ELECTION_ENABLE=false
+    volumes:
+      - ./kafka-artifacts/kafka2.keystore.jks:/var/private/ssl/kafka.server.keystore.jks
+      - ./kafka-artifacts/kafka2.truststore.jks:/var/private/ssl/kafka.server.truststore.jks
+    depends_on:
+      - zookeeper
+ 
+  kafka3:
+    image: hyperledger/fabric-kafka
+    container_name: kafka3
+    environment:
+      - KAFKA_ADVERTISED_HOST_NAME=kafka3
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_SSL_KEYSTORE_LOCATION=/var/private/ssl/kafka.server.keystore.jks
+      - KAFKA_SSL_KEYSTORE_PASSWORD=test1234
+      - KAFKA_SSL_KEY_PASSWORD=test1234
+      - KAFKA_SSL_TRUSTSTORE_LOCATION=/var/private/ssl/kafka.server.truststore.jks
+      - KAFKA_SSL_TRUSTSTORE_PASSWORD=test1234
+      - KAFKA_LISTENERS=PLAINTEXT://kafka3:9092,SSL://kafka3:9093
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka3:9092,SSL://kafka3:9093
+      - KAFKA_MESSAGE_MAX_BYTES=102760448
+      - KAFKA_REPLICA_FETCH_MAX_BYTES=102760448
+      - KAFKA_UNCLEAN_LEADER_ELECTION_ENABLE=false
+    volumes:
+      - ./kafka-artifacts/kafka3.keystore.jks:/var/private/ssl/kafka.server.keystore.jks
+      - ./kafka-artifacts/kafka3.truststore.jks:/var/private/ssl/kafka.server.truststore.jks
+    depends_on:
+      - zookeeper
+
+  kafka4:
+    image: hyperledger/fabric-kafka
+    container_name: kafka4
+    environment:
+      - KAFKA_ADVERTISED_HOST_NAME=kafka4
+      - KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_SSL_KEYSTORE_LOCATION=/var/private/ssl/kafka.server.keystore.jks
+      - KAFKA_SSL_KEYSTORE_PASSWORD=test1234
+      - KAFKA_SSL_KEY_PASSWORD=test1234
+      - KAFKA_SSL_TRUSTSTORE_LOCATION=/var/private/ssl/kafka.server.truststore.jks
+      - KAFKA_SSL_TRUSTSTORE_PASSWORD=test1234
+      - KAFKA_LISTENERS=PLAINTEXT://kafka4:9092,SSL://kafka4:9093
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka4:9092,SSL://kafka4:9093
+      - KAFKA_MESSAGE_MAX_BYTES=102760448
+      - KAFKA_REPLICA_FETCH_MAX_BYTES=102760448
+      - KAFKA_UNCLEAN_LEADER_ELECTION_ENABLE=false
+    volumes:
+      - ./kafka-artifacts/kafka4.keystore.jks:/var/private/ssl/kafka.server.keystore.jks
+      - ./kafka-artifacts/kafka4.truststore.jks:/var/private/ssl/kafka.server.truststore.jks
+    depends_on:
+      - zookeeper      
+
+  orderer.example.com:
+    extends:
+      file: base/docker-compose-base.yaml
+      service: orderer.example.com
+    container_name: orderer.example.com
+    #kafak集群给orderer节点配置的公私钥
+    environment:
+      - ORDERER_GENERAL_LOGLEVEL=debug
+      - ORDERER_KAFKA_TLS_ENABLED=true
+      - ORDERER_KAFKA_TLS_PRIVATEKEY_FILE=/var/private/ssl/client-key.pem
+      - ORDERER_KAFKA_TLS_CERTIFICATE_FILE=/var/private/ssl/client-cert.pem
+      - ORDERER_KAFKA_TLS_ROOTCAS_FILE=/var/private/ssl/ca-cert.pem
+      - ORDERER_KAFKA_VERBOSE=true
+    volumes:
+      - ./kafka-artifacts/ca-cert.pem:/var/private/ssl/ca-cert.pem
+      - ./kafka-artifacts/client-cert.pem:/var/private/ssl/client-cert.pem
+      - ./kafka-artifacts/client-key.pem:/var/private/ssl/client-key.pem
+    depends_on:
+      - kafka1
+      - kafka2
+      - kafka3
+      - kafka4
+
+  peer0.org1.example.com:
+    container_name: peer0.org1.example.com
+    environment:
+      - CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=tls_default
+    extends:
+      file: base/docker-compose-base.yaml
+      service: peer0.org1.example.com
+
+  cli:
+    container_name: cli
+    image: hyperledger/fabric-tools
+    tty: true
+    environment:
+      - GOPATH=/opt/gopath
+      - CORE_VM_ENDPOINT=unix:///host/var/run/docker.sock
+      - CORE_LOGGING_LEVEL=DEBUG
+      - CORE_PEER_ID=cli
+      - CORE_PEER_ADDRESS=peer0.org1.example.com:7051
+      - CORE_PEER_LOCALMSPID=Org1MSP
+      - CORE_PEER_TLS_ENABLED=true
+      - CORE_PEER_TLS_CERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/server.crt
+      - CORE_PEER_TLS_KEY_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/server.key
+      - CORE_PEER_TLS_ROOTCERT_FILE=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt
+      - CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp
+      - ORDERER_CA=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem
+    working_dir: /opt/gopath/src/github.com/hyperledger/fabric/peer
+    command: /bin/bash -c './scripts/script.sh;sleep 3600'
+    volumes:
+      - /var/run/:/host/var/run/
+      - ./crypto-config:/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/
+      - ./examples/chaincode/:/opt/gopath/src/github.com/chaincode
+      - ./channel-artifacts:/opt/gopath/src/github.com/hyperledger/fabric/peer/channel-artifacts
+      - ./scripts:/opt/gopath/src/github.com/hyperledger/fabric/peer/scripts/
+    depends_on:
+      - orderer.example.com
+      - peer0.org1.example.com
