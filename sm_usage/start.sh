@@ -6,8 +6,8 @@ CHANNEL_NAME="mychannel"
 generateArtifacts(){
     mkdir -p channel-artifacts
     echo
-	echo "##########################################################"
-	echo "##### Generate certificates using cryptogen tool #########"
+    echo "##########################################################"
+    echo "##### Generate certificates using cryptogen tool #########"
 	echo "##########################################################"
 	cryptogen generate --pluginPath ./smPlugin.so --config=./crypto-config.yaml
 
