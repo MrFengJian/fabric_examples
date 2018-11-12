@@ -1,5 +1,6 @@
 #!/bin/bash
 
+export PATH=$PATH:/home/fengjj/1.3.0
 
 CHANNEL_NAME="mychannel"
 
@@ -9,9 +10,9 @@ generateArtifacts(){
     echo "##########################################################"
     echo "##### Generate certificates using cryptogen tool #########"
     echo "##########################################################"
-	#using sm cryptogen or not
-    #cryptogensm generate --pluginPath ./smPlugin.so --config=./crypto-config.yaml
-	cryptogen generate --config=./crypto-config.yaml
+    #using sm cryptogen or not
+    cryptogensm generate --pluginPath ./smPlugin.so --config=./crypto-config.yaml
+    #cryptogen generate --config=./crypto-config.yaml
 
     echo "##########################################################"
     echo "#########  Generating Orderer Genesis block ##############"

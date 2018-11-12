@@ -55,12 +55,14 @@ services:
       - CORE_PEER_MSPCONFIGPATH=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp
       - ORDERER_CA=/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/ordererOrganizations/example.com/orderers/orderer.example.com/msp/tlscacerts/tlsca.example.com-cert.pem
     working_dir: /opt/gopath/src/github.com/hyperledger/fabric/peer
-    #command: /bin/bash -c './scripts/script.sh ${CHANNEL_NAME}; sleep $TIMEOUT'
+    command: /bin/bash -c './scripts/script.sh;sleep 3600'
     volumes:
         - /var/run/:/host/var/run/
         - ./crypto-config:/opt/gopath/src/github.com/hyperledger/fabric/peer/crypto/
         - ./examples/chaincode/:/opt/gopath/src/github.com/chaincode
         - ./channel-artifacts:/opt/gopath/src/github.com/hyperledger/fabric/peer/channel-artifacts
+        - ./sm/core.yaml:/etc/hyperledger/fabric/core.yaml
+        - ./scripts:/opt/gopath/src/github.com/hyperledger/fabric/peer/scripts/  
     depends_on:
       - orderer.example.com
       - peer0.org1.example.com
