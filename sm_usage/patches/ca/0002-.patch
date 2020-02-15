@@ -1,0 +1,1889 @@
+From 05d298a77575d4e7c5e90b5980b7af0011e3ae68 Mon Sep 17 00:00:00 2001
+From: fengjianjian <fengjianjian007@gmail.com>
+Date: Tue, 26 Feb 2019 10:57:44 +0800
+Subject: [PATCH 2/3] =?UTF-8?q?=E5=9B=BD=E5=AF=86=E8=AF=81=E4=B9=A6?=
+ =?UTF-8?q?=E7=9A=84=E6=94=AF=E6=8C=81=E5=AE=9E=E7=8E=B0?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ .gitignore                                    |   1 +
+ Makefile                                      |   2 +-
+ rebuild.sh                                    |  16 +
+ util/csp.go                                   |   3 +
+ .../fabric/bccsp/factory/gmfactory.go         |  42 ++
+ .../fabric/bccsp/factory/nopkcs11.go          |   4 +-
+ .../fabric/bccsp/factory/pkcs11.go            |   4 +-
+ .../fabric/bccsp/factory/pluginfactory.go     |   4 +-
+ .../hyperledger/fabric/bccsp/gm/fileks.go     | 407 +++++++++++++++++
+ .../hyperledger/fabric/bccsp/gm/impl.go       | 360 +++++++++++++++
+ .../hyperledger/fabric/bccsp/gm/keys.go       | 415 ++++++++++++++++++
+ .../hyperledger/fabric/bccsp/gm/sm2.go        |  78 ++++
+ .../hyperledger/fabric/bccsp/gm/sm2key.go     | 119 +++++
+ .../hyperledger/fabric/bccsp/gm/sm3sig.go     |  51 +++
+ .../hyperledger/fabric/bccsp/sm2opts.go       | 131 ++++++
+ .../hyperledger/fabric/bccsp/sw/keyimport.go  |  21 +-
+ .../hyperledger/fabric/bccsp/sw/new.go        |   1 -
+ .../hyperledger/fabric/bccsp/sw/rsa.go        |   3 +-
+ 18 files changed, 1642 insertions(+), 20 deletions(-)
+ create mode 100755 rebuild.sh
+ create mode 100644 vendor/github.com/hyperledger/fabric/bccsp/factory/gmfactory.go
+ create mode 100644 vendor/github.com/hyperledger/fabric/bccsp/gm/fileks.go
+ create mode 100644 vendor/github.com/hyperledger/fabric/bccsp/gm/impl.go
+ create mode 100644 vendor/github.com/hyperledger/fabric/bccsp/gm/keys.go
+ create mode 100644 vendor/github.com/hyperledger/fabric/bccsp/gm/sm2.go
+ create mode 100644 vendor/github.com/hyperledger/fabric/bccsp/gm/sm2key.go
+ create mode 100644 vendor/github.com/hyperledger/fabric/bccsp/gm/sm3sig.go
+ create mode 100644 vendor/github.com/hyperledger/fabric/bccsp/sm2opts.go
+
+diff --git a/.gitignore b/.gitignore
+index 87f85eb..1c8ea98 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -21,3 +21,4 @@ testdata/ec_cert.pem
+ vendor/github.com/cloudflare/cfssl/vendor/github.com/cloudflare/cfssl_trust/ca-bundle/http:*.crt
+ # tox
+ .tox/
++.idea
+diff --git a/Makefile b/Makefile
+index 6077700..1ecc33a 100644
+--- a/Makefile
++++ b/Makefile
+@@ -113,7 +113,7 @@ fabric-ca-server: bin/fabric-ca-server
+ 
+ bin/%: $(GO_SOURCE)
+ 	@echo "Building ${@F} in bin directory ..."
+-	@mkdir -p bin && go build -o bin/${@F} -tags "pkcs11" -ldflags "$(GO_LDFLAGS)" $(PKGNAME)/$(path-map.${@F})
++	@mkdir -p bin && go build -o bin/${@F} -tags "nopkcs11" -ldflags "$(GO_LDFLAGS)" $(PKGNAME)/$(path-map.${@F})
+ 	@echo "Built bin/${@F}"
+ 
+ # We (re)build a package within a docker context but persist the $GOPATH/pkg
+diff --git a/rebuild.sh b/rebuild.sh
+new file mode 100755
+index 0000000..3d8355e
+--- /dev/null
++++ b/rebuild.sh
+@@ -0,0 +1,16 @@
++#!/bin/bash
++
++#rm -rf ./bin/*
++#make fabric-ca-server
++#make fabric-ca-client
++
++docker rm -fv test
++docker run -tid --name test hyperledger/fabric-ca:1.4.0 sleep 3600
++docker cp ./bin/fabric-ca-server test:/usr/local/bin/
++docker cp ./bin/fabric-ca-client test:/usr/local/bin/
++
++docker commit test hyperledger/fabric-ca:1.4.0-sm
++
++#docker commit -c "CMD fabric-ca-server start -b admin:adminpw" test hyperledger/fabric-ca:1.4.0-sm
++
++docker rm -fv test
+diff --git a/util/csp.go b/util/csp.go
+index 625b4bd..2043112 100644
+--- a/util/csp.go
++++ b/util/csp.go
+@@ -146,6 +146,9 @@ func getBCCSPKeyOpts(kr csr.KeyRequest, ephemeral bool) (opts bccsp.KeyGenOpts,
+ 		default:
+ 			return nil, errors.Errorf("Invalid ECDSA key size: %d", kr.Size())
+ 		}
++	case "sm2":
++		//fengjj，处理国密证书生成
++		return &bccsp.SM2KeyGenOpts{Temporary: ephemeral}, nil
+ 	default:
+ 		return nil, errors.Errorf("Invalid algorithm: %s", kr.Algo())
+ 	}
+diff --git a/vendor/github.com/hyperledger/fabric/bccsp/factory/gmfactory.go b/vendor/github.com/hyperledger/fabric/bccsp/factory/gmfactory.go
+new file mode 100644
+index 0000000..7330a7f
+--- /dev/null
++++ b/vendor/github.com/hyperledger/fabric/bccsp/factory/gmfactory.go
+@@ -0,0 +1,42 @@
++/*
++Copyright IBM Corp. All Rights Reserved.
++
++SPDX-License-Identifier: Apache-2.0
++*/
++package factory
++
++import (
++	"errors"
++	"github.com/hyperledger/fabric/bccsp"
++	"github.com/hyperledger/fabric/bccsp/gm"
++)
++
++const (
++	// PluginFactoryName is the factory name for BCCSP plugins
++	GMFactoryName = "SW"
++)
++
++// PluginFactory is the factory for BCCSP plugins
++type GMFactory struct{}
++
++// Name returns the name of this factory
++func (f *GMFactory) Name() string {
++	return GMFactoryName
++}
++
++// Get returns an instance of BCCSP using Opts.
++func (f *GMFactory) Get(config *FactoryOpts) (bccsp.BCCSP, error) {
++	// Validate arguments
++	if config == nil || config.SwOpts == nil {
++		return nil, errors.New("Invalid config. It must not be nil.")
++	}
++
++	swOpts := config.SwOpts
++
++	var keystore string
++	if swOpts.FileKeystore != nil && swOpts.Ephemeral != true {
++		keystore = swOpts.FileKeystore.KeyStorePath
++	}
++
++	return gm.New(keystore)
++}
+\ No newline at end of file
+diff --git a/vendor/github.com/hyperledger/fabric/bccsp/factory/nopkcs11.go b/vendor/github.com/hyperledger/fabric/bccsp/factory/nopkcs11.go
+index a83695f..77125fe 100644
+--- a/vendor/github.com/hyperledger/fabric/bccsp/factory/nopkcs11.go
++++ b/vendor/github.com/hyperledger/fabric/bccsp/factory/nopkcs11.go
+@@ -53,7 +53,7 @@ func InitFactories(config *FactoryOpts) error {
+ 
+ 		// Software-Based BCCSP
+ 		if config.SwOpts != nil {
+-			f := &SWFactory{}
++			f := &GMFactory{}
+ 			err := initBCCSP(f, config)
+ 			if err != nil {
+ 				factoriesInitError = errors.Wrapf(err, "Failed initializing BCCSP.")
+@@ -84,7 +84,7 @@ func GetBCCSPFromOpts(config *FactoryOpts) (bccsp.BCCSP, error) {
+ 	var f BCCSPFactory
+ 	switch config.ProviderName {
+ 	case "SW":
+-		f = &SWFactory{}
++		f = &GMFactory{}
+ 	case "PLUGIN":
+ 		f = &PluginFactory{}
+ 	default:
+diff --git a/vendor/github.com/hyperledger/fabric/bccsp/factory/pkcs11.go b/vendor/github.com/hyperledger/fabric/bccsp/factory/pkcs11.go
+index 4456d70..cd8eba2 100644
+--- a/vendor/github.com/hyperledger/fabric/bccsp/factory/pkcs11.go
++++ b/vendor/github.com/hyperledger/fabric/bccsp/factory/pkcs11.go
+@@ -62,7 +62,7 @@ func setFactories(config *FactoryOpts) error {
+ 
+ 	// Software-Based BCCSP
+ 	if config.SwOpts != nil {
+-		f := &SWFactory{}
++		f := &GMFactory{}
+ 		err := initBCCSP(f, config)
+ 		if err != nil {
+ 			factoriesInitError = errors.Wrap(err, "Failed initializing SW.BCCSP")
+@@ -101,7 +101,7 @@ func GetBCCSPFromOpts(config *FactoryOpts) (bccsp.BCCSP, error) {
+ 	var f BCCSPFactory
+ 	switch config.ProviderName {
+ 	case "SW":
+-		f = &SWFactory{}
++		f = &GMFactory{}
+ 	case "PKCS11":
+ 		f = &PKCS11Factory{}
+ 	case "PLUGIN":
+diff --git a/vendor/github.com/hyperledger/fabric/bccsp/factory/pluginfactory.go b/vendor/github.com/hyperledger/fabric/bccsp/factory/pluginfactory.go
+index 3870bbc..70c6e8a 100644
+--- a/vendor/github.com/hyperledger/fabric/bccsp/factory/pluginfactory.go
++++ b/vendor/github.com/hyperledger/fabric/bccsp/factory/pluginfactory.go
+@@ -65,10 +65,10 @@ func (f *PluginFactory) Get(config *FactoryOpts) (bccsp.BCCSP, error) {
+ 	}
+ 
+ 	// check to make sure symbol New meets the required function signature
+-	new, ok := sym.(func(config map[string]interface{}) (bccsp.BCCSP, error))
++	newFunc, ok := sym.(func(config map[string]interface{}) (bccsp.BCCSP, error))
+ 	if !ok {
+ 		return nil, fmt.Errorf("Plugin does not implement the required function signature for 'New'")
+ 	}
+ 
+-	return new(config.PluginOpts.Config)
++	return newFunc(config.PluginOpts.Config)
+ }
+diff --git a/vendor/github.com/hyperledger/fabric/bccsp/gm/fileks.go b/vendor/github.com/hyperledger/fabric/bccsp/gm/fileks.go
+new file mode 100644
+index 0000000..086c3e7
+--- /dev/null
++++ b/vendor/github.com/hyperledger/fabric/bccsp/gm/fileks.go
+@@ -0,0 +1,407 @@
++/*
++Copyright IBM Corp. 2016 All Rights Reserved.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++		 http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++package gm
++
++import (
++	"bytes"
++	"io/ioutil"
++	"os"
++	"sync"
++
++	"errors"
++	"strings"
++
++	"encoding/hex"
++	"fmt"
++	"path/filepath"
++
++	"github.com/swordboy/crypto/sm/sm2"
++	"github.com/hyperledger/fabric/bccsp"
++	"github.com/hyperledger/fabric/bccsp/sw"
++	"github.com/hyperledger/fabric/bccsp/utils"
++)
++
++// NewFileBasedKeyStore instantiated a file-based key store at a given position.
++// The key store can be encrypted if a non-empty password is specifiec.
++// It can be also be set as read only. In this case, any store operation
++// will be forbidden
++func NewFileBasedKeyStore(pwd []byte, path string, readOnly bool) (bccsp.KeyStore, error) {
++	o, err := sw.NewFileBasedKeyStore(pwd, path, readOnly)
++	if err != nil {
++		return nil, err
++	}
++	ks := &fileBasedKeyStore{k: o}
++	return ks, ks.Init(pwd, path, readOnly)
++}
++
++// fileBasedKeyStore is a folder-based KeyStore.
++// Each key is stored in a separated file whose name contains the key's SKI
++// and flags to identity the key's type. All the keys are stored in
++// a folder whose path is provided at initialization time.
++// The KeyStore can be initialized with a password, this password
++// is used to encrypt and decrypt the files storing the keys.
++// A KeyStore can be read only to avoid the overwriting of keys.
++type fileBasedKeyStore struct {
++	path string
++
++	readOnly bool
++	isOpen   bool
++
++	pwd []byte
++
++	// Sync
++	m sync.Mutex
++
++	k bccsp.KeyStore
++}
++
++// Init initializes this KeyStore with a password, a path to a folder
++// where the keys are stored and a read only flag.
++// Each key is stored in a separated file whose name contains the key's SKI
++// and flags to identity the key's type.
++// If the KeyStore is initialized with a password, this password
++// is used to encrypt and decrypt the files storing the keys.
++// The pwd can be nil for non-encrypted KeyStores. If an encrypted
++// key-store is initialized without a password, then retrieving keys from the
++// KeyStore will fail.
++// A KeyStore can be read only to avoid the overwriting of keys.
++func (ks *fileBasedKeyStore) Init(pwd []byte, path string, readOnly bool) error {
++	// Validate inputs
++	// pwd can be nil
++
++	if len(path) == 0 {
++		return errors.New("An invalid KeyStore path provided. Path cannot be an empty string.")
++	}
++
++	ks.m.Lock()
++	defer ks.m.Unlock()
++
++	if ks.isOpen {
++		return errors.New("KeyStore already initilized.")
++	}
++
++	ks.path = path
++	ks.pwd = utils.Clone(pwd)
++
++	err := ks.createKeyStoreIfNotExists()
++	if err != nil {
++		return err
++	}
++
++	err = ks.openKeyStore()
++	if err != nil {
++		return err
++	}
++
++	ks.readOnly = readOnly
++
++	return nil
++}
++
++// ReadOnly returns true if this KeyStore is read only, false otherwise.
++// If ReadOnly is true then StoreKey will fail.
++func (ks *fileBasedKeyStore) ReadOnly() bool {
++	return ks.readOnly
++}
++
++// GetKey returns a key object whose SKI is the one passed.
++func (ks *fileBasedKeyStore) GetKey(ski []byte) (k bccsp.Key, err error) {
++	// Validate arguments
++	if len(ski) == 0 {
++		return nil, errors.New("Invalid SKI. Cannot be of zero length.")
++	}
++
++	suffix := ks.getSuffix(hex.EncodeToString(ski))
++
++	switch suffix {
++	case "sk":
++		// Load the private key
++		key, err := ks.loadPrivateKey(hex.EncodeToString(ski))
++		if err != nil {
++			return nil, fmt.Errorf("Failed loading secret key [%x] [%s]", ski, err)
++		}
++
++		switch key.(type) {
++		case *sm2.PrivateKey:
++			return &sm2PrivateKey{key.(*sm2.PrivateKey)}, nil
++		default:
++			return ks.k.GetKey(ski)
++		}
++	case "pk":
++		// Load the public key
++		key, err := ks.loadPublicKey(hex.EncodeToString(ski))
++		if err != nil {
++			return nil, fmt.Errorf("Failed loading public key [%x] [%s]", ski, err)
++		}
++
++		switch key.(type) {
++		case *sm2.PublicKey:
++			return &sm2PublicKey{key.(*sm2.PublicKey)}, nil
++		default:
++			return ks.k.GetKey(ski)
++		}
++	default:
++		key, err := ks.searchKeystoreForSKI(ski)
++		if err != nil {
++			return ks.k.GetKey(ski)
++		}
++		return key, nil
++	}
++}
++
++// StoreKey stores the key k in this KeyStore.
++// If this KeyStore is read only then the method will fail.
++func (ks *fileBasedKeyStore) StoreKey(k bccsp.Key) (err error) {
++	if ks.readOnly {
++		return errors.New("Read only KeyStore.")
++	}
++
++	if k == nil {
++		return errors.New("Invalid key. It must be different from nil.")
++	}
++	switch k.(type) {
++	case *sm2PrivateKey:
++		kk := k.(*sm2PrivateKey)
++
++		err = ks.storePrivateKey(hex.EncodeToString(k.SKI()), kk.privKey)
++		if err != nil {
++			return fmt.Errorf("Failed storing sm2 private key [%s]", err)
++		}
++	case *sm2PublicKey:
++		kk := k.(*sm2PublicKey)
++
++		err = ks.storePublicKey(hex.EncodeToString(k.SKI()), kk.pubKey)
++		if err != nil {
++			return fmt.Errorf("Failed storing sm2 public key [%s]", err)
++		}
++
++	default:
++		return ks.k.StoreKey(k)
++	}
++
++	return
++}
++
++func (ks *fileBasedKeyStore) searchKeystoreForSKI(ski []byte) (k bccsp.Key, err error) {
++
++	files, _ := ioutil.ReadDir(ks.path)
++	for _, f := range files {
++		if f.IsDir() {
++			continue
++		}
++
++		if f.Size() > (1 << 16) { //64k, somewhat arbitrary limit, considering even large RSA keys
++			continue
++		}
++
++		raw, err := ioutil.ReadFile(filepath.Join(ks.path, f.Name()))
++		if err != nil {
++			continue
++		}
++
++		key, err := PEMtoPrivateKey(raw, ks.pwd)
++		if err != nil {
++			continue
++		}
++
++		switch key.(type) {
++		case *sm2.PrivateKey:
++			k = &sm2PrivateKey{key.(*sm2.PrivateKey)}
++		default:
++			continue
++		}
++
++		if !bytes.Equal(k.SKI(), ski) {
++			continue
++		}
++
++		return k, nil
++	}
++	return nil, fmt.Errorf("Key with SKI %s not found in %s", hex.EncodeToString(ski), ks.path)
++}
++
++func (ks *fileBasedKeyStore) getSuffix(alias string) string {
++	files, _ := ioutil.ReadDir(ks.path)
++	for _, f := range files {
++		if strings.HasPrefix(f.Name(), alias) {
++			if strings.HasSuffix(f.Name(), "sk") {
++				return "sk"
++			}
++			if strings.HasSuffix(f.Name(), "pk") {
++				return "pk"
++			}
++			if strings.HasSuffix(f.Name(), "key") {
++				return "key"
++			}
++			break
++		}
++	}
++	return ""
++}
++
++func (ks *fileBasedKeyStore) storePrivateKey(alias string, privateKey interface{}) error {
++	rawKey, err := PrivateKeyToPEM(privateKey, ks.pwd)
++	if err != nil {
++		logger.Errorf("Failed converting private key to PEM [%s]: [%s]", alias, err)
++		return err
++	}
++
++	err = ioutil.WriteFile(ks.getPathForAlias(alias, "sk"), rawKey, 0700)
++	if err != nil {
++		logger.Errorf("Failed storing private key [%s]: [%s]", alias, err)
++		return err
++	}
++
++	return nil
++}
++
++func (ks *fileBasedKeyStore) storePublicKey(alias string, publicKey interface{}) error {
++	rawKey, err := PublicKeyToPEM(publicKey, ks.pwd)
++	if err != nil {
++		logger.Errorf("Failed converting public key to PEM [%s]: [%s]", alias, err)
++		return err
++	}
++
++	err = ioutil.WriteFile(ks.getPathForAlias(alias, "pk"), rawKey, 0700)
++	if err != nil {
++		logger.Errorf("Failed storing private key [%s]: [%s]", alias, err)
++		return err
++	}
++
++	return nil
++}
++
++func (ks *fileBasedKeyStore) storeKey(alias string, key []byte) error {
++	pem, err := utils.AEStoEncryptedPEM(key, ks.pwd)
++	if err != nil {
++		logger.Errorf("Failed converting key to PEM [%s]: [%s]", alias, err)
++		return err
++	}
++
++	err = ioutil.WriteFile(ks.getPathForAlias(alias, "key"), pem, 0700)
++	if err != nil {
++		logger.Errorf("Failed storing key [%s]: [%s]", alias, err)
++		return err
++	}
++
++	return nil
++}
++
++func (ks *fileBasedKeyStore) loadPrivateKey(alias string) (interface{}, error) {
++	path := ks.getPathForAlias(alias, "sk")
++	logger.Debugf("Loading private key [%s] at [%s]...", alias, path)
++
++	raw, err := ioutil.ReadFile(path)
++	if err != nil {
++		logger.Errorf("Failed loading private key [%s]: [%s].", alias, err.Error())
++
++		return nil, err
++	}
++
++	privateKey, err := PEMtoPrivateKey(raw, ks.pwd)
++	if err != nil {
++		logger.Errorf("Failed parsing private key [%s]: [%s].", alias, err.Error())
++
++		return nil, err
++	}
++
++	return privateKey, nil
++}
++
++func (ks *fileBasedKeyStore) loadPublicKey(alias string) (interface{}, error) {
++	path := ks.getPathForAlias(alias, "pk")
++	logger.Debugf("Loading public key [%s] at [%s]...", alias, path)
++
++	raw, err := ioutil.ReadFile(path)
++	if err != nil {
++		logger.Errorf("Failed loading public key [%s]: [%s].", alias, err.Error())
++
++		return nil, err
++	}
++
++	privateKey, err := PEMtoPublicKey(raw, ks.pwd)
++	if err != nil {
++		logger.Errorf("Failed parsing private key [%s]: [%s].", alias, err.Error())
++
++		return nil, err
++	}
++
++	return privateKey, nil
++}
++
++func (ks *fileBasedKeyStore) loadKey(alias string) ([]byte, error) {
++	path := ks.getPathForAlias(alias, "key")
++	logger.Debugf("Loading key [%s] at [%s]...", alias, path)
++
++	pem, err := ioutil.ReadFile(path)
++	if err != nil {
++		logger.Errorf("Failed loading key [%s]: [%s].", alias, err.Error())
++
++		return nil, err
++	}
++
++	key, err := PEMtoAES(pem, ks.pwd)
++	if err != nil {
++		logger.Errorf("Failed parsing key [%s]: [%s]", alias, err)
++
++		return nil, err
++	}
++
++	return key, nil
++}
++
++func (ks *fileBasedKeyStore) createKeyStoreIfNotExists() error {
++	// Check keystore directory
++	ksPath := ks.path
++	missing, err := utils.DirMissingOrEmpty(ksPath)
++
++	if missing {
++		logger.Debugf("KeyStore path [%s] missing [%t]: [%s]", ksPath, missing, utils.ErrToString(err))
++
++		err := ks.createKeyStore()
++		if err != nil {
++			logger.Errorf("Failed creating KeyStore At [%s]: [%s]", ksPath, err.Error())
++			return nil
++		}
++	}
++
++	return nil
++}
++
++func (ks *fileBasedKeyStore) createKeyStore() error {
++	// Create keystore directory root if it doesn't exist yet
++	ksPath := ks.path
++	logger.Debugf("Creating KeyStore at [%s]...", ksPath)
++
++	os.MkdirAll(ksPath, 0755)
++
++	logger.Debugf("KeyStore created at [%s].", ksPath)
++	return nil
++}
++
++func (ks *fileBasedKeyStore) openKeyStore() error {
++	if ks.isOpen {
++		return nil
++	}
++
++	logger.Debugf("KeyStore opened at [%s]...done", ks.path)
++
++	return nil
++}
++
++func (ks *fileBasedKeyStore) getPathForAlias(alias, suffix string) string {
++	return filepath.Join(ks.path, alias+"_"+suffix)
++}
+diff --git a/vendor/github.com/hyperledger/fabric/bccsp/gm/impl.go b/vendor/github.com/hyperledger/fabric/bccsp/gm/impl.go
+new file mode 100644
+index 0000000..5366da4
+--- /dev/null
++++ b/vendor/github.com/hyperledger/fabric/bccsp/gm/impl.go
+@@ -0,0 +1,360 @@
++/*
++Copyright IBM Corp. All Rights Reserved.
++
++SPDX-License-Identifier: Apache-2.0
++*/
++package gm
++
++import (
++	"hash"
++
++	"crypto/rand"
++	"fmt"
++	"github.com/swordboy/crypto/sm/sm2"
++	"github.com/swordboy/crypto/sm/sm3"
++	"github.com/swordboy/crypto/x509"
++	"math/big"
++
++	origx509 "crypto/x509"
++
++	"github.com/hyperledger/fabric/bccsp"
++	"github.com/hyperledger/fabric/bccsp/sw"
++	"github.com/hyperledger/fabric/common/flogging"
++	"github.com/pkg/errors"
++)
++
++var (
++	logger = flogging.MustGetLogger("plugin_sm")
++)
++
++type impl struct {
++	sw bccsp.BCCSP
++	ks bccsp.KeyStore
++}
++
++func getKeyStoreDir(keystore string) (string, error) {
++	return keystore, nil
++}
++
++// New returns a new instance of the BCCSP implementation
++func New(keystore string) (bccsp.BCCSP, error) {
++
++	var (
++		swCsp bccsp.BCCSP
++		ks    bccsp.KeyStore
++		err   error
++	)
++
++	keyStorePath, err := getKeyStoreDir(keystore)
++	if err != nil {
++		return nil, err
++	}
++
++	if keyStorePath == "" {
++		ks = sw.NewDummyKeyStore()
++		swCsp, err = sw.NewDefaultSecurityLevelWithKeystore(ks)
++		if err != nil {
++			return nil, err
++		}
++		return &impl{sw: swCsp, ks: ks}, nil
++	}
++
++	//TODO: hash算法设置？？？是否可以使用SM3
++	swCsp, err = sw.NewDefaultSecurityLevel(keyStorePath)
++	if err != nil {
++		return nil, err
++	}
++
++	ks, err = NewFileBasedKeyStore(nil, keyStorePath, false)
++	if err != nil {
++		return nil, err
++	}
++
++	return &impl{sw: swCsp, ks: ks}, nil
++}
++
++// KeyGen generates a key using opts.
++func (csp *impl) KeyGen(opts bccsp.KeyGenOpts) (k bccsp.Key, err error) {
++	switch opts.(type) {
++	case *bccsp.SM2KeyGenOpts:
++		privKey, err := sm2.GenerateKey(rand.Reader)
++		if err != nil {
++			return nil, fmt.Errorf("Failed generating SM2 key for : [%s]", err)
++		}
++
++		k = &sm2PrivateKey{privKey}
++
++		if !opts.Ephemeral() {
++			// Store the key
++			err = csp.ks.StoreKey(k)
++			if err != nil {
++				return nil, errors.Wrapf(err, "Failed storing imported key with opts [%v]", opts)
++			}
++		}
++
++		return k, nil
++	default:
++		return csp.sw.KeyGen(opts)
++	}
++
++}
++
++// KeyDeriv derives a key from k using opts.
++// The opts argument should be appropriate for the primitive used.
++func (csp *impl) KeyDeriv(k bccsp.Key, opts bccsp.KeyDerivOpts) (dk bccsp.Key, err error) {
++	switch k := k.(type) {
++	case *sm2PrivateKey:
++		// Validate opts
++		if opts == nil {
++			return nil, errors.New("Invalid opts parameter. It must not be nil.")
++		}
++
++		sm2K := k
++
++		switch opts.(type) {
++		// Re-randomized an ECDSA private key
++		case *bccsp.SM2ReRandKeyOpts:
++			reRandOpts := opts.(*bccsp.SM2ReRandKeyOpts)
++			tempSK := &sm2.PrivateKey{
++				PublicKey: sm2.PublicKey{
++					Curve: sm2K.privKey.Curve,
++					X:     new(big.Int),
++					Y:     new(big.Int),
++				},
++				D: new(big.Int),
++			}
++
++			var k = new(big.Int).SetBytes(reRandOpts.ExpansionValue())
++			var one = new(big.Int).SetInt64(1)
++			n := new(big.Int).Sub(sm2K.privKey.Params().N, one)
++			k.Mod(k, n)
++			k.Add(k, one)
++
++			tempSK.D.Add(sm2K.privKey.D, k)
++			tempSK.D.Mod(tempSK.D, sm2K.privKey.PublicKey.Params().N)
++
++			// Compute temporary public key
++			tempX, tempY := sm2K.privKey.PublicKey.ScalarBaseMult(k.Bytes())
++			tempSK.PublicKey.X, tempSK.PublicKey.Y =
++				tempSK.PublicKey.Add(
++					sm2K.privKey.PublicKey.X, sm2K.privKey.PublicKey.Y,
++					tempX, tempY,
++				)
++
++			// Verify temporary public key is a valid point on the reference curve
++			isOn := tempSK.Curve.IsOnCurve(tempSK.PublicKey.X, tempSK.PublicKey.Y)
++			if !isOn {
++				return nil, errors.New("Failed temporary public key IsOnCurve check.")
++			}
++
++			return &sm2PrivateKey{tempSK}, nil
++		default:
++			return nil, fmt.Errorf("Unsupported 'KeyDerivOpts' provided [%v]", opts)
++		}
++	case *sm2PublicKey:
++		// Validate opts
++		if opts == nil {
++			return nil, errors.New("Invalid opts parameter. It must not be nil.")
++		}
++
++		sm2K := k
++
++		switch opts.(type) {
++		// Re-randomized an ECDSA private key
++		case *bccsp.SM2ReRandKeyOpts:
++			reRandOpts := opts.(*bccsp.SM2ReRandKeyOpts)
++			tempSK := &sm2.PublicKey{
++				Curve: sm2K.pubKey.Curve,
++				X:     new(big.Int),
++				Y:     new(big.Int),
++			}
++
++			var k = new(big.Int).SetBytes(reRandOpts.ExpansionValue())
++			var one = new(big.Int).SetInt64(1)
++			n := new(big.Int).Sub(sm2K.pubKey.Params().N, one)
++			k.Mod(k, n)
++			k.Add(k, one)
++
++			// Compute temporary public key
++			tempX, tempY := sm2K.pubKey.ScalarBaseMult(k.Bytes())
++			tempSK.X, tempSK.Y = tempSK.Add(
++				sm2K.pubKey.X, sm2K.pubKey.Y,
++				tempX, tempY,
++			)
++
++			// Verify temporary public key is a valid point on the reference curve
++			isOn := tempSK.Curve.IsOnCurve(tempSK.X, tempSK.Y)
++			if !isOn {
++				return nil, errors.New("Failed temporary public key IsOnCurve check.")
++			}
++
++			return &sm2PublicKey{tempSK}, nil
++		default:
++			return nil, fmt.Errorf("Unsupported 'KeyDerivOpts' provided [%v]", opts)
++		}
++	default:
++		return csp.sw.KeyDeriv(k, opts)
++	}
++}
++
++// KeyImport imports a key from its raw representation using opts.
++// The opts argument should be appropriate for the primitive used.
++func (csp *impl) KeyImport(raw interface{}, opts bccsp.KeyImportOpts) (k bccsp.Key, err error) {
++	switch opts.(type) {
++	case *bccsp.SM2PKIXPublicKeyImportOpts:
++		der, ok := raw.([]byte)
++		if !ok {
++			return nil, errors.New("Invalid raw material. Expected byte array.")
++		}
++
++		if len(der) == 0 {
++			return nil, errors.New("Invalid raw. It must not be nil.")
++		}
++
++		lowLevelKey, err := DERToPublicKey(der)
++		if err != nil {
++			return nil, fmt.Errorf("Failed converting PKIX to ECDSA public key [%s]", err)
++		}
++
++		sm2PK, ok := lowLevelKey.(*sm2.PublicKey)
++		if !ok {
++			return nil, errors.New("Failed casting to ECDSA public key. Invalid raw material.")
++		}
++
++		return &sm2PublicKey{sm2PK}, nil
++	case *bccsp.SM2PrivateKeyImportOpts:
++		der, ok := raw.([]byte)
++		if !ok {
++			return nil, errors.New("[SM2PrivateKeyImportOpts] Invalid raw material. Expected byte array.")
++		}
++
++		if len(der) == 0 {
++			return nil, errors.New("[SM2PrivateKeyImportOpts] Invalid raw. It must not be nil.")
++		}
++
++		lowLevelKey, err := DERToPrivateKey(der)
++		if err != nil {
++			return nil, fmt.Errorf("Failed converting PKIX to SM2 private key [%s]", err)
++		}
++
++		sm2SK, ok := lowLevelKey.(*sm2.PrivateKey)
++		if !ok {
++			return nil, errors.New("Failed casting to SM2 private key. Invalid raw material.")
++		}
++
++		return &sm2PrivateKey{sm2SK}, nil
++	case *bccsp.SM2GoPublicKeyImportOpts:
++		lowLevelKey, ok := raw.(*sm2.PublicKey)
++		if !ok {
++			return nil, errors.New("Invalid raw material. Expected *sm2.PublicKey.")
++		}
++
++		return &sm2PublicKey{lowLevelKey}, nil
++	case *bccsp.X509PublicKeyImportOpts:
++		x509Cert, ok := raw.(*x509.Certificate)
++		if !ok {
++			return nil, errors.New("Invalid raw material. Expected *x509.Certificate.")
++		}
++
++		//if pk, ok := x509Cert.PublicKey.(*sm2.PublicKey); ok {
++		//	return &sm2PublicKey{pk}, nil
++		//} else {
++		//	return csp.sw.KeyImport(raw, opts)
++		//}
++		pk := x509Cert.PublicKey
++
++		switch pk.(type) {
++		case *sm2.PublicKey:
++			return &sm2PublicKey{pk.(*sm2.PublicKey)}, nil
++		default:
++			//convert to origin x509
++			origCert, err := origx509.ParseCertificate(raw.(*x509.Certificate).Raw)
++			if err != nil {
++				return nil, errors.New("Invalid raw material. can't do x509 converting from swordboy x509 to origin x509.")
++			}
++			return csp.sw.KeyImport(origCert, opts)
++		}
++	default:
++		return csp.sw.KeyImport(raw, opts)
++	}
++}
++
++// GetKey returns the key this CSP associates to
++// the Subject Key Identifier ski.
++func (csp *impl) GetKey(ski []byte) (k bccsp.Key, err error) {
++	if k, err := csp.ks.GetKey(ski); err == nil {
++		return k, err
++	} else {
++		return csp.sw.GetKey(ski)
++	}
++}
++
++// Hash hashes messages msg using options opts.
++// If opts is nil, the default hash function will be used.
++func (csp *impl) Hash(msg []byte, opts bccsp.HashOpts) (hash []byte, err error) {
++	switch opts.(type) {
++	case *bccsp.SM3Opts:
++		h := sm3.New()
++		h.Write(msg)
++		return h.Sum(nil), nil
++	case *bccsp.SM3SIGOpts:
++		h := NewSM3Sig()
++		h.Write(msg)
++		return h.Sum(nil), nil
++	default:
++		return csp.sw.Hash(msg, opts)
++	}
++}
++
++// GetHash returns and instance of hash.Hash using options opts.
++// If opts is nil, the default hash function will be returned.
++func (csp *impl) GetHash(opts bccsp.HashOpts) (h hash.Hash, err error) {
++	switch opts.(type) {
++	case *bccsp.SM3Opts:
++		return sm3.New(), nil
++	case *bccsp.SM3SIGOpts:
++		return
++	default:
++		return csp.sw.GetHash(opts)
++	}
++}
++
++// Sign signs digest using key k.
++// The opts argument should be appropriate for the algorithm used.
++//
++// Note that when a signature of a hash of a larger message is needed,
++// the caller is responsible for hashing the larger message and passing
++// the hash (as digest).
++func (csp *impl) Sign(k bccsp.Key, digest []byte, opts bccsp.SignerOpts) (signature []byte, err error) {
++	switch k := k.(type) {
++	case *sm2PrivateKey:
++		return signSM2(k.privKey, digest, opts)
++	default:
++		return csp.sw.Sign(k, digest, opts)
++	}
++}
++
++// Verify verifies signature against key k and digest
++// The opts argument should be appropriate for the algorithm used.
++func (csp *impl) Verify(k bccsp.Key, signature, digest []byte, opts bccsp.SignerOpts) (valid bool, err error) {
++	switch k := k.(type) {
++	case *sm2PrivateKey:
++		return verifySM2(&(k.privKey.PublicKey), signature, digest, opts)
++	case *sm2PublicKey:
++		return verifySM2(k.pubKey, signature, digest, opts)
++	default:
++		return csp.sw.Verify(k, signature, digest, opts)
++	}
++}
++
++// Encrypt encrypts plaintext using key k.
++// The opts argument should be appropriate for the algorithm used.
++func (csp *impl) Encrypt(k bccsp.Key, plaintext []byte, opts bccsp.EncrypterOpts) (ciphertext []byte, err error) {
++	return nil, nil
++}
++
++// Decrypt decrypts ciphertext using key k.
++// The opts argument should be appropriate for the algorithm used.
++func (csp *impl) Decrypt(k bccsp.Key, ciphertext []byte, opts bccsp.DecrypterOpts) (plaintext []byte, err error) {
++	return nil, nil
++}
+diff --git a/vendor/github.com/hyperledger/fabric/bccsp/gm/keys.go b/vendor/github.com/hyperledger/fabric/bccsp/gm/keys.go
+new file mode 100644
+index 0000000..cbba979
+--- /dev/null
++++ b/vendor/github.com/hyperledger/fabric/bccsp/gm/keys.go
+@@ -0,0 +1,415 @@
++/*
++Copyright IBM Corp. 2016 All Rights Reserved.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++		 http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package gm
++
++import (
++	"crypto/ecdsa"
++	"crypto/elliptic"
++	"crypto/rand"
++	"crypto/rsa"
++	"encoding/asn1"
++	"encoding/pem"
++	"errors"
++	"fmt"
++
++	"github.com/swordboy/crypto/sm/sm2"
++	"github.com/swordboy/crypto/x509"
++)
++
++// struct to hold info required for PKCS#8
++type pkcs8Info struct {
++	Version             int
++	PrivateKeyAlgorithm []asn1.ObjectIdentifier
++	PrivateKey          []byte
++}
++
++type ecPrivateKey struct {
++	Version       int
++	PrivateKey    []byte
++	NamedCurveOID asn1.ObjectIdentifier `asn1:"optional,explicit,tag:0"`
++	PublicKey     asn1.BitString        `asn1:"optional,explicit,tag:1"`
++}
++
++var (
++	oidNamedCurveP224    = asn1.ObjectIdentifier{1, 3, 132, 0, 33}
++	oidNamedCurveP256    = asn1.ObjectIdentifier{1, 2, 840, 10045, 3, 1, 7}
++	oidNamedCurveP384    = asn1.ObjectIdentifier{1, 3, 132, 0, 34}
++	oidNamedCurveP521    = asn1.ObjectIdentifier{1, 3, 132, 0, 35}
++	oidNamedCurveP256SM2 = asn1.ObjectIdentifier{1, 2, 156, 10197, 1, 301}
++)
++
++var oidPublicKeyECDSA = asn1.ObjectIdentifier{1, 2, 840, 10045, 2, 1}
++var oidPublicKeySM2 = asn1.ObjectIdentifier{1, 2, 840, 10045, 2, 1}
++
++func oidFromNamedCurve(curve elliptic.Curve) (asn1.ObjectIdentifier, bool) {
++	switch curve {
++	case sm2.P256Sm2():
++		return oidNamedCurveP256SM2, true
++	case elliptic.P224():
++		return oidNamedCurveP224, true
++	case elliptic.P256():
++		return oidNamedCurveP256, true
++	case elliptic.P384():
++		return oidNamedCurveP384, true
++	case elliptic.P521():
++		return oidNamedCurveP521, true
++	}
++	return nil, false
++}
++
++// PrivateKeyToPEM converts the private key to PEM format.
++// EC private keys are converted to PKCS#8 format.
++// RSA private keys are converted to PKCS#1 format.
++func PrivateKeyToPEM(privateKey interface{}, pwd []byte) ([]byte, error) {
++	// Validate inputs
++	if len(pwd) != 0 {
++		return PrivateKeyToEncryptedPEM(privateKey, pwd)
++	}
++	if privateKey == nil {
++		return nil, errors.New("Invalid key. It must be different from nil.")
++	}
++	k := privateKey.(*sm2.PrivateKey)
++	// get the oid for the curve
++	oidNamedCurve, ok := oidFromNamedCurve(k.Curve)
++	if !ok {
++		return nil, errors.New("unknown sm2 elliptic curve")
++	}
++
++	// based on https://golang.org/src/crypto/x509/sec1.go
++	privateKeyBytes := k.D.Bytes()
++	paddedPrivateKey := make([]byte, (k.Curve.Params().N.BitLen()+7)/8)
++	copy(paddedPrivateKey[len(paddedPrivateKey)-len(privateKeyBytes):], privateKeyBytes)
++	// omit NamedCurveOID for compatibility as it's optional
++	asn1Bytes, err := asn1.Marshal(ecPrivateKey{
++		Version:    1,
++		PrivateKey: paddedPrivateKey,
++		PublicKey:  asn1.BitString{Bytes: elliptic.Marshal(k.Curve, k.X, k.Y)},
++	})
++
++	if err != nil {
++		return nil, fmt.Errorf("error marshaling EC key to asn1 [%s]", err)
++	}
++
++	var pkcs8Key pkcs8Info
++	pkcs8Key.Version = 0
++	pkcs8Key.PrivateKeyAlgorithm = make([]asn1.ObjectIdentifier, 2)
++	pkcs8Key.PrivateKeyAlgorithm[0] = oidPublicKeySM2
++	pkcs8Key.PrivateKeyAlgorithm[1] = oidNamedCurve
++	pkcs8Key.PrivateKey = asn1Bytes
++
++	pkcs8Bytes, err := asn1.Marshal(pkcs8Key)
++	if err != nil {
++		return nil, fmt.Errorf("error marshaling sm2 EC key to asn1 [%s]", err)
++	}
++	return pem.EncodeToMemory(
++		&pem.Block{
++			Type:  "PRIVATE KEY",
++			Bytes: pkcs8Bytes,
++		},
++	), nil
++}
++
++// PrivateKeyToEncryptedPEM converts a private key to an encrypted PEM
++func PrivateKeyToEncryptedPEM(privateKey interface{}, pwd []byte) ([]byte, error) {
++	if privateKey == nil {
++		return nil, errors.New("Invalid private key. It must be different from nil.")
++	}
++
++	switch k := privateKey.(type) {
++	case *sm2.PrivateKey:
++		if k == nil {
++			return nil, errors.New("Invalid ecdsa private key. It must be different from nil.")
++		}
++		raw, err := x509.MarshalECPrivateKey(k)
++
++		if err != nil {
++			return nil, err
++		}
++
++		block, err := x509.EncryptPEMBlock(
++			rand.Reader,
++			"PRIVATE KEY",
++			raw,
++			pwd,
++			x509.PEMCipherAES256)
++
++		if err != nil {
++			return nil, err
++		}
++
++		return pem.EncodeToMemory(block), nil
++
++	default:
++		return nil, errors.New("Invalid key type. It must be *ecdsa.PrivateKey")
++	}
++}
++
++// DERToPrivateKey unmarshals a der to private key
++func DERToPrivateKey(der []byte) (key interface{}, err error) {
++
++	if key, err = x509.ParsePKCS1PrivateKey(der); err == nil {
++		return key, nil
++	}
++
++	if key, err = x509.ParsePKCS8PrivateKey(der); err == nil {
++		switch key.(type) {
++		case *sm2.PrivateKey:
++			return
++		default:
++			return nil, errors.New("Found unknown private key type in PKCS#8 wrapping")
++		}
++	}
++
++	if key, err = x509.ParseECPrivateKey(der); err == nil {
++		return
++	}
++
++	return nil, errors.New("Invalid key type. The DER must contain an rsa.PrivateKey or ecdsa.PrivateKey or sm.PrivateKey")
++}
++
++// PEMtoPrivateKey unmarshals a pem to private key
++func PEMtoPrivateKey(raw []byte, pwd []byte) (interface{}, error) {
++	if len(raw) == 0 {
++		return nil, errors.New("Invalid PEM. It must be different from nil.")
++	}
++	block, _ := pem.Decode(raw)
++	if block == nil {
++		return nil, fmt.Errorf("Failed decoding PEM. Block must be different from nil. [% x]", raw)
++	}
++
++	// TODO: derive from header the type of the key
++
++	if x509.IsEncryptedPEMBlock(block) {
++		if len(pwd) == 0 {
++			return nil, errors.New("Encrypted Key. Need a password")
++		}
++
++		decrypted, err := x509.DecryptPEMBlock(block, pwd)
++		if err != nil {
++			return nil, fmt.Errorf("Failed PEM decryption [%s]", err)
++		}
++
++		key, err := DERToPrivateKey(decrypted)
++		if err != nil {
++			return nil, err
++		}
++		return key, err
++	}
++
++	cert, err := DERToPrivateKey(block.Bytes)
++	if err != nil {
++		return nil, err
++	}
++	return cert, err
++}
++
++// PEMtoAES extracts from the PEM an AES key
++func PEMtoAES(raw []byte, pwd []byte) ([]byte, error) {
++	if len(raw) == 0 {
++		return nil, errors.New("Invalid PEM. It must be different from nil.")
++	}
++	block, _ := pem.Decode(raw)
++	if block == nil {
++		return nil, fmt.Errorf("Failed decoding PEM. Block must be different from nil. [% x]", raw)
++	}
++
++	if x509.IsEncryptedPEMBlock(block) {
++		if len(pwd) == 0 {
++			return nil, errors.New("Encrypted Key. Password must be different fom nil")
++		}
++
++		decrypted, err := x509.DecryptPEMBlock(block, pwd)
++		if err != nil {
++			return nil, fmt.Errorf("Failed PEM decryption. [%s]", err)
++		}
++		return decrypted, nil
++	}
++
++	return block.Bytes, nil
++}
++
++// AEStoPEM encapsulates an AES key in the PEM format
++func AEStoPEM(raw []byte) []byte {
++	return pem.EncodeToMemory(&pem.Block{Type: "AES PRIVATE KEY", Bytes: raw})
++}
++
++// AEStoEncryptedPEM encapsulates an AES key in the encrypted PEM format
++func AEStoEncryptedPEM(raw []byte, pwd []byte) ([]byte, error) {
++	if len(raw) == 0 {
++		return nil, errors.New("Invalid aes key. It must be different from nil")
++	}
++	if len(pwd) == 0 {
++		return AEStoPEM(raw), nil
++	}
++
++	block, err := x509.EncryptPEMBlock(
++		rand.Reader,
++		"AES PRIVATE KEY",
++		raw,
++		pwd,
++		x509.PEMCipherAES256)
++
++	if err != nil {
++		return nil, err
++	}
++
++	return pem.EncodeToMemory(block), nil
++}
++
++// PublicKeyToPEM marshals a public key to the pem format
++func PublicKeyToPEM(publicKey interface{}, pwd []byte) ([]byte, error) {
++	if len(pwd) != 0 {
++		return PublicKeyToEncryptedPEM(publicKey, pwd)
++	}
++
++	if publicKey == nil {
++		return nil, errors.New("Invalid public key. It must be different from nil.")
++	}
++
++	switch k := publicKey.(type) {
++	case *ecdsa.PublicKey:
++		if k == nil {
++			return nil, errors.New("Invalid ecdsa public key. It must be different from nil.")
++		}
++		PubASN1, err := x509.MarshalPKIXPublicKey(k)
++		if err != nil {
++			return nil, err
++		}
++
++		return pem.EncodeToMemory(
++			&pem.Block{
++				Type:  "PUBLIC KEY",
++				Bytes: PubASN1,
++			},
++		), nil
++	case *rsa.PublicKey:
++		if k == nil {
++			return nil, errors.New("Invalid rsa public key. It must be different from nil.")
++		}
++		PubASN1, err := x509.MarshalPKIXPublicKey(k)
++		if err != nil {
++			return nil, err
++		}
++
++		return pem.EncodeToMemory(
++			&pem.Block{
++				Type:  "RSA PUBLIC KEY",
++				Bytes: PubASN1,
++			},
++		), nil
++	case *sm2.PublicKey:
++		if k == nil {
++			return nil, errors.New("Invalid sm2 public key. It must be different from nil.")
++		}
++		PubASN1, err := x509.MarshalPKIXPublicKey(k)
++		if err != nil {
++			return nil, err
++		}
++
++		return pem.EncodeToMemory(
++			&pem.Block{
++				Type:  "PUBLIC KEY",
++				Bytes: PubASN1,
++			},
++		), nil
++	default:
++		return nil, errors.New("Invalid key type. It must be *sm2.PublicKey")
++	}
++}
++
++// PublicKeyToEncryptedPEM converts a public key to encrypted pem
++func PublicKeyToEncryptedPEM(publicKey interface{}, pwd []byte) ([]byte, error) {
++	if publicKey == nil {
++		return nil, errors.New("Invalid public key. It must be different from nil.")
++	}
++	if len(pwd) == 0 {
++		return nil, errors.New("Invalid password. It must be different from nil.")
++	}
++
++	switch k := publicKey.(type) {
++	case *sm2.PublicKey:
++		if k == nil {
++			return nil, errors.New("Invalid sm2 public key. It must be different from nil.")
++		}
++		raw, err := x509.MarshalPKIXPublicKey(k)
++		if err != nil {
++			return nil, err
++		}
++
++		block, err := x509.EncryptPEMBlock(
++			rand.Reader,
++			"PUBLIC KEY",
++			raw,
++			pwd,
++			x509.PEMCipherAES256)
++
++		if err != nil {
++			return nil, err
++		}
++
++		return pem.EncodeToMemory(block), nil
++
++	default:
++		return nil, errors.New("Invalid key type. It must be *sm2.PublicKey")
++	}
++}
++
++// PEMtoPublicKey unmarshals a pem to public key
++func PEMtoPublicKey(raw []byte, pwd []byte) (interface{}, error) {
++	if len(raw) == 0 {
++		return nil, errors.New("Invalid PEM. It must be different from nil.")
++	}
++	block, _ := pem.Decode(raw)
++	if block == nil {
++		return nil, fmt.Errorf("Failed decoding. Block must be different from nil. [% x]", raw)
++	}
++
++	// TODO: derive from header the type of the key
++	if x509.IsEncryptedPEMBlock(block) {
++		if len(pwd) == 0 {
++			return nil, errors.New("Encrypted Key. Password must be different from nil")
++		}
++
++		decrypted, err := x509.DecryptPEMBlock(block, pwd)
++		if err != nil {
++			return nil, fmt.Errorf("Failed PEM decryption. [%s]", err)
++		}
++
++		key, err := DERToPublicKey(decrypted)
++		if err != nil {
++			return nil, err
++		}
++		return key, err
++	}
++
++	cert, err := DERToPublicKey(block.Bytes)
++	if err != nil {
++		return nil, err
++	}
++	return cert, err
++}
++
++// DERToPublicKey unmarshals a der to public key
++func DERToPublicKey(raw []byte) (pub interface{}, err error) {
++	if len(raw) == 0 {
++		return nil, errors.New("Invalid DER. It must be different from nil.")
++	}
++
++	key, err := x509.ParsePKIXPublicKey(raw)
++
++	return key, err
++}
+diff --git a/vendor/github.com/hyperledger/fabric/bccsp/gm/sm2.go b/vendor/github.com/hyperledger/fabric/bccsp/gm/sm2.go
+new file mode 100644
+index 0000000..01e3fdb
+--- /dev/null
++++ b/vendor/github.com/hyperledger/fabric/bccsp/gm/sm2.go
+@@ -0,0 +1,78 @@
++/*
++Copyright IBM Corp. 2016 All Rights Reserved.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++		SPDX-License-Identifier: Apache-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++package gm
++
++import (
++	"crypto/rand"
++	"encoding/asn1"
++	"errors"
++	"fmt"
++	"math/big"
++
++	sm "github.com/swordboy/crypto/sm/sm2"
++
++	"github.com/hyperledger/fabric/bccsp"
++)
++
++type SM2Signature struct {
++	R, S *big.Int
++}
++
++func MarshalSM2Signature(r, s *big.Int) ([]byte, error) {
++	return asn1.Marshal(SM2Signature{r, s})
++}
++
++func UnmarshalSM2Signature(raw []byte) (*big.Int, *big.Int, error) {
++	// Unmarshal
++	sig := new(SM2Signature)
++	_, err := asn1.Unmarshal(raw, sig)
++	if err != nil {
++		return nil, nil, fmt.Errorf("Failed unmashalling signature [%s]", err)
++	}
++
++	// Validate sig
++	if sig.R == nil {
++		return nil, nil, errors.New("Invalid signature. R must be different from nil.")
++	}
++	if sig.S == nil {
++		return nil, nil, errors.New("Invalid signature. S must be different from nil.")
++	}
++
++	if sig.R.Sign() != 1 {
++		return nil, nil, errors.New("Invalid signature. R must be larger than zero")
++	}
++	if sig.S.Sign() != 1 {
++		return nil, nil, errors.New("Invalid signature. S must be larger than zero")
++	}
++
++	return sig.R, sig.S, nil
++}
++
++func signSM2(k *sm.PrivateKey, digest []byte, opts bccsp.SignerOpts) (signature []byte, err error) {
++	r, s, err := sm.Sign(rand.Reader, k, digest)
++	if err != nil {
++		return nil, err
++	}
++	return MarshalSM2Signature(r, s)
++}
++
++func verifySM2(k *sm.PublicKey, signature, digest []byte, opts bccsp.SignerOpts) (valid bool, err error) {
++	r, s, err := UnmarshalSM2Signature(signature)
++	if err != nil {
++		return false, fmt.Errorf("Failed unmashalling signature [%s]", err)
++	}
++	return sm.Verify(k, digest, r, s), nil
++}
+diff --git a/vendor/github.com/hyperledger/fabric/bccsp/gm/sm2key.go b/vendor/github.com/hyperledger/fabric/bccsp/gm/sm2key.go
+new file mode 100644
+index 0000000..abf0b6c
+--- /dev/null
++++ b/vendor/github.com/hyperledger/fabric/bccsp/gm/sm2key.go
+@@ -0,0 +1,119 @@
++/*
++Copyright CETCS. 2017 All Rights Reserved.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++	SPDX-License-Identifier: Apache-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++package gm
++
++import (
++	"fmt"
++
++	sm "github.com/swordboy/crypto/sm/sm2"
++	"github.com/swordboy/crypto/x509"
++
++	"crypto/sha256"
++
++	"crypto/elliptic"
++
++	"github.com/hyperledger/fabric/bccsp"
++)
++
++type sm2PrivateKey struct {
++	privKey *sm.PrivateKey
++}
++
++// Bytes converts this key to its byte representation,
++// if this operation is allowed.
++func (k *sm2PrivateKey) Bytes() (raw []byte, err error) {
++	return x509.MarshalECPrivateKey(k.privKey)
++}
++
++// SKI returns the subject key identifier of this key.
++func (k *sm2PrivateKey) SKI() (ski []byte) {
++	if k.privKey == nil {
++		return nil
++	}
++
++	// Marshall the public key
++	raw := elliptic.Marshal(k.privKey.Curve, k.privKey.PublicKey.X, k.privKey.PublicKey.Y)
++
++	// Hash it
++	hash := sha256.New()
++	hash.Write(raw)
++	return hash.Sum(nil)
++}
++
++// Symmetric returns true if this key is a symmetric key,
++// false if this key is asymmetric
++func (k *sm2PrivateKey) Symmetric() bool {
++	return false
++}
++
++// Private returns true if this key is a private key,
++// false otherwise.
++func (k *sm2PrivateKey) Private() bool {
++	return true
++}
++
++// PublicKey returns the corresponding public key part of an asymmetric public/private key pair.
++// This method returns an error in symmetric key schemes.
++func (k *sm2PrivateKey) PublicKey() (bccsp.Key, error) {
++	return &sm2PublicKey{&k.privKey.PublicKey}, nil
++}
++
++type sm2PublicKey struct {
++	pubKey *sm.PublicKey
++}
++
++// Bytes converts this key to its byte representation,
++// if this operation is allowed.
++func (k *sm2PublicKey) Bytes() (raw []byte, err error) {
++	raw, err = x509.MarshalPKIXPublicKey(k.pubKey)
++	if err != nil {
++		return nil, fmt.Errorf("Failed marshalling key [%s]", err)
++	}
++	return
++}
++
++// SKI returns the subject key identifier of this key.
++func (k *sm2PublicKey) SKI() (ski []byte) {
++	if k.pubKey == nil {
++		return nil
++	}
++
++	// Marshall the public key
++	raw := elliptic.Marshal(k.pubKey.Curve, k.pubKey.X, k.pubKey.Y)
++
++	// Hash it
++	hash := sha256.New()
++	hash.Write(raw)
++	return hash.Sum(nil)
++}
++
++// Symmetric returns true if this key is a symmetric key,
++// false if this key is asymmetric
++func (k *sm2PublicKey) Symmetric() bool {
++	return false
++}
++
++// Private returns true if this key is a private key,
++// false otherwise.
++func (k *sm2PublicKey) Private() bool {
++	return false
++}
++
++// PublicKey returns the corresponding public key part of an asymmetric public/private key pair.
++// This method returns an error in symmetric key schemes.
++func (k *sm2PublicKey) PublicKey() (bccsp.Key, error) {
++	return k, nil
++}
+\ No newline at end of file
+diff --git a/vendor/github.com/hyperledger/fabric/bccsp/gm/sm3sig.go b/vendor/github.com/hyperledger/fabric/bccsp/gm/sm3sig.go
+new file mode 100644
+index 0000000..75ef47c
+--- /dev/null
++++ b/vendor/github.com/hyperledger/fabric/bccsp/gm/sm3sig.go
+@@ -0,0 +1,51 @@
++/*
++Copyright CETCS. 2017 All Rights Reserved.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++	SPDX-License-Identifier: Apache-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++package gm
++
++import "hash"
++
++type sm3sig struct {
++	msg []byte
++}
++
++func NewSM3Sig() hash.Hash {
++	return &sm3sig{}
++}
++
++func (d *sm3sig) Write(p []byte) (n int, err error) {
++	d.msg = append(d.msg, p...)
++	return len(d.msg), nil
++}
++
++func (d *sm3sig) Sum(b []byte) []byte {
++	if b != nil {
++		panic("sm3sig fail: b must be nil")
++	}
++
++	return d.msg
++}
++
++func (d *sm3sig) Reset() {
++	d.msg = d.msg[:0]
++}
++
++func (d *sm3sig) Size() int {
++	return 0
++}
++
++func (d *sm3sig) BlockSize() int {
++	return 0
++}
+\ No newline at end of file
+diff --git a/vendor/github.com/hyperledger/fabric/bccsp/sm2opts.go b/vendor/github.com/hyperledger/fabric/bccsp/sm2opts.go
+new file mode 100644
+index 0000000..b09e954
+--- /dev/null
++++ b/vendor/github.com/hyperledger/fabric/bccsp/sm2opts.go
+@@ -0,0 +1,131 @@
++/*
++Copyright IBM Corp. 2016 All Rights Reserved.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++	SPDX-License-Identifier: Apache-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++package bccsp
++
++const (
++	SM2 = "SM2"
++	SM3 = "SM3"
++	//This is used for indicating hashopts while doing sm3 before sm2 signature
++	// through which hash will actually do nothing
++	SM3SIG = "SM3SIG"
++	// SM2ReRand SM2 key re-randomization
++	SM2ReRand = "SM2"
++)
++
++// SHA256Opts contains options relating to SHA-256.
++type SM3Opts struct {
++}
++
++// Algorithm returns the hash algorithm identifier (to be used).
++func (opts *SM3Opts) Algorithm() string {
++	return SM3
++}
++
++// SHA256Opts contains options relating to SHA-256.
++type SM3SIGOpts struct {
++}
++
++// Algorithm returns the hash algorithm identifier (to be used).
++func (opts *SM3SIGOpts) Algorithm() string {
++	return SM3SIG
++}
++
++// SM2KeyGenOpts contains options for SM2 key generation.
++type SM2KeyGenOpts struct {
++	Temporary bool
++}
++
++// Algorithm returns the key generation algorithm identifier (to be used).
++func (opts *SM2KeyGenOpts) Algorithm() string {
++	return SM2
++}
++
++// Ephemeral returns true if the key to generate has to be ephemeral,
++// false otherwise.
++func (opts *SM2KeyGenOpts) Ephemeral() bool {
++	return opts.Temporary
++}
++
++// SM2PKIXPublicKeyImportOpts contains options for SM2 public key importation in PKIX format
++type SM2PKIXPublicKeyImportOpts struct {
++	Temporary bool
++}
++
++// Algorithm returns the key importation algorithm identifier (to be used).
++func (opts *SM2PKIXPublicKeyImportOpts) Algorithm() string {
++	return SM2
++}
++
++// Ephemeral returns true if the key to generate has to be ephemeral,
++// false otherwise.
++func (opts *SM2PKIXPublicKeyImportOpts) Ephemeral() bool {
++	return opts.Temporary
++}
++
++// SM2PrivateKeyImportOpts contains options for SM2 secret key importation in DER format
++// or PKCS#8 format.
++type SM2PrivateKeyImportOpts struct {
++	Temporary bool
++}
++
++// Algorithm returns the key importation algorithm identifier (to be used).
++func (opts *SM2PrivateKeyImportOpts) Algorithm() string {
++	return SM2
++}
++
++// Ephemeral returns true if the key to generate has to be ephemeral,
++// false otherwise.
++func (opts *SM2PrivateKeyImportOpts) Ephemeral() bool {
++	return opts.Temporary
++}
++
++// SM2GoPublicKeyImportOpts contains options for SM2 key importation from ecdsa.PublicKey
++type SM2GoPublicKeyImportOpts struct {
++	Temporary bool
++}
++
++// Algorithm returns the key importation algorithm identifier (to be used).
++func (opts *SM2GoPublicKeyImportOpts) Algorithm() string {
++	return SM2
++}
++
++// Ephemeral returns true if the key to generate has to be ephemeral,
++// false otherwise.
++func (opts *SM2GoPublicKeyImportOpts) Ephemeral() bool {
++	return opts.Temporary
++}
++
++// SM2ReRandKeyOpts contains options for SM2 key re-randomization.
++type SM2ReRandKeyOpts struct {
++	Temporary bool
++	Expansion []byte
++}
++
++// Algorithm returns the key derivation algorithm identifier (to be used).
++func (opts *SM2ReRandKeyOpts) Algorithm() string {
++	return SM2ReRand
++}
++
++// Ephemeral returns true if the key to generate has to be ephemeral,
++// false otherwise.
++func (opts *SM2ReRandKeyOpts) Ephemeral() bool {
++	return opts.Temporary
++}
++
++// ExpansionValue returns the re-randomization factor
++func (opts *SM2ReRandKeyOpts) ExpansionValue() []byte {
++	return opts.Expansion
++}
+diff --git a/vendor/github.com/hyperledger/fabric/bccsp/sw/keyimport.go b/vendor/github.com/hyperledger/fabric/bccsp/sw/keyimport.go
+index d729c14..e9c88ee 100644
+--- a/vendor/github.com/hyperledger/fabric/bccsp/sw/keyimport.go
++++ b/vendor/github.com/hyperledger/fabric/bccsp/sw/keyimport.go
+@@ -112,17 +112,6 @@ func (*ecdsaPrivateKeyImportOptsKeyImporter) KeyImport(raw interface{}, opts bcc
+ 	return &ecdsaPrivateKey{ecdsaSK}, nil
+ }
+ 
+-type ecdsaGoPublicKeyImportOptsKeyImporter struct{}
+-
+-func (*ecdsaGoPublicKeyImportOptsKeyImporter) KeyImport(raw interface{}, opts bccsp.KeyImportOpts) (bccsp.Key, error) {
+-	lowLevelKey, ok := raw.(*ecdsa.PublicKey)
+-	if !ok {
+-		return nil, errors.New("Invalid raw material. Expected *ecdsa.PublicKey.")
+-	}
+-
+-	return &ecdsaPublicKey{lowLevelKey}, nil
+-}
+-
+ type rsaPrivatekeyImportOptsKeyImporter struct {
+ }
+ 
+@@ -148,6 +137,16 @@ func (*rsaPrivatekeyImportOptsKeyImporter) KeyImport(raw interface{}, opts bccsp
+ 	return &rsaPrivateKey{rsaSK}, nil
+ }
+ 
++type ecdsaGoPublicKeyImportOptsKeyImporter struct{}
++
++func (*ecdsaGoPublicKeyImportOptsKeyImporter) KeyImport(raw interface{}, opts bccsp.KeyImportOpts) (bccsp.Key, error) {
++	lowLevelKey, ok := raw.(*ecdsa.PublicKey)
++	if !ok {
++		return nil, errors.New("Invalid raw material. Expected *ecdsa.PublicKey.")
++	}
++
++	return &ecdsaPublicKey{lowLevelKey}, nil
++}
+ 
+ type rsaGoPublicKeyImportOptsKeyImporter struct{}
+ 
+diff --git a/vendor/github.com/hyperledger/fabric/bccsp/sw/new.go b/vendor/github.com/hyperledger/fabric/bccsp/sw/new.go
+index b6cc97d..b82b3ce 100644
+--- a/vendor/github.com/hyperledger/fabric/bccsp/sw/new.go
++++ b/vendor/github.com/hyperledger/fabric/bccsp/sw/new.go
+@@ -103,6 +103,5 @@ func NewWithParams(securityLevel int, hashFamily string, keyStore bccsp.KeyStore
+ 	swbccsp.AddWrapper(reflect.TypeOf(&bccsp.X509PublicKeyImportOpts{}), &x509PublicKeyImportOptsKeyImporter{bccsp: swbccsp})
+ 	swbccsp.AddWrapper(reflect.TypeOf(&bccsp.RSA2048PrivateKeyImportOpts{}), &rsaPrivatekeyImportOptsKeyImporter{})
+ 
+-
+ 	return swbccsp, nil
+ }
+diff --git a/vendor/github.com/hyperledger/fabric/bccsp/sw/rsa.go b/vendor/github.com/hyperledger/fabric/bccsp/sw/rsa.go
+index 3a841f4..346a699 100644
+--- a/vendor/github.com/hyperledger/fabric/bccsp/sw/rsa.go
++++ b/vendor/github.com/hyperledger/fabric/bccsp/sw/rsa.go
+@@ -19,10 +19,10 @@ package sw
+ import (
+ 	"crypto/rand"
+ 	"crypto/rsa"
+-	"errors"
+ 	"fmt"
+ 
+ 	"github.com/hyperledger/fabric/bccsp"
++	"crypto"
+ )
+ 
+ type rsaSigner struct{}
+@@ -32,6 +32,7 @@ func (s *rsaSigner) Sign(k bccsp.Key, digest []byte, opts bccsp.SignerOpts) ([]b
+ 		opts=&rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthEqualsHash, Hash: crypto.SHA256}
+ 		//return nil, errors.New("Invalid options. Must be different from nil.")
+ 	}
++
+ 	return k.(*rsaPrivateKey).privKey.Sign(rand.Reader, digest, opts)
+ }
+ 
+-- 
+2.20.1.windows.1
+

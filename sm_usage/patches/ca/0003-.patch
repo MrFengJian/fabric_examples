@@ -1,0 +1,1219 @@
+From d903933dcd76ea48ec56c53ad4942b643bc40fb2 Mon Sep 17 00:00:00 2001
+From: fengjianjian <fengjianjian007@gmail.com>
+Date: Fri, 1 Mar 2019 14:50:24 +0800
+Subject: [PATCH 3/3] =?UTF-8?q?=E5=9F=BA=E6=9C=AC=E5=AE=8C=E6=88=90?=
+ =?UTF-8?q?=E5=9B=BD=E5=AF=86=E8=AF=81=E4=B9=A6=E7=9A=84=E5=8F=91=E6=94=BE?=
+ =?UTF-8?q?=E5=92=8C=E7=AE=A1=E7=90=86=E6=94=AF=E6=8C=81?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ cmd/fabric-ca-client/command/getcainfo.go     |   2 +-
+ lib/ca.go                                     |  18 +-
+ lib/client/credential/x509/signer.go          |   2 +-
+ lib/server.go                                 |   2 +-
+ lib/serverenroll.go                           |   2 +-
+ lib/servergencrl.go                           |   2 +-
+ lib/serverrequestcontext.go                   |   4 +-
+ lib/tcert/tcert.go                            |   2 +-
+ lib/tcert/util.go                             |   2 +-
+ lib/util.go                                   |  26 ++-
+ rebuild.sh                                    |   4 +-
+ util/csp.go                                   |  18 +-
+ util/util.go                                  |   7 +-
+ .../cloudflare/cfssl/config/config.go         |  55 +++---
+ vendor/github.com/cloudflare/cfssl/crl/crl.go |   2 +-
+ vendor/github.com/cloudflare/cfssl/csr/csr.go |  26 ++-
+ .../cloudflare/cfssl/helpers/helpers.go       |  98 ++++++++---
+ .../cloudflare/cfssl/initca/initca.go         |   2 +-
+ .../github.com/cloudflare/cfssl/ocsp/ocsp.go  | 113 ++++++------
+ .../cloudflare/cfssl/revoke/revoke.go         | 164 +++++++++---------
+ .../cloudflare/cfssl/signer/local/local.go    |   2 +-
+ .../cloudflare/cfssl/signer/remote/remote.go  |   2 +-
+ .../cloudflare/cfssl/signer/signer.go         |  10 +-
+ .../cfssl/signer/universal/universal.go       |   2 +-
+ .../hyperledger/fabric/bccsp/gm/keys.go       |   3 +-
+ .../hyperledger/fabric/bccsp/utils/keys.go    |   8 +-
+ .../fabric/common/attrmgr/attrmgr.go          |   2 +-
+ 27 files changed, 355 insertions(+), 225 deletions(-)
+
+diff --git a/cmd/fabric-ca-client/command/getcainfo.go b/cmd/fabric-ca-client/command/getcainfo.go
+index b362f59..67db770 100644
+--- a/cmd/fabric-ca-client/command/getcainfo.go
++++ b/cmd/fabric-ca-client/command/getcainfo.go
+@@ -18,7 +18,7 @@ package command
+ 
+ import (
+ 	"bytes"
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"encoding/pem"
+ 	"fmt"
+ 	"net/url"
+diff --git a/lib/ca.go b/lib/ca.go
+index 5aa1e18..23c6394 100644
+--- a/lib/ca.go
++++ b/lib/ca.go
+@@ -11,7 +11,7 @@ import (
+ 	"crypto/dsa"
+ 	"crypto/ecdsa"
+ 	"crypto/rsa"
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"encoding/pem"
+ 	"fmt"
+ 	"io/ioutil"
+@@ -36,7 +36,7 @@ import (
+ 	"github.com/hyperledger/fabric-ca/lib/dbutil"
+ 	"github.com/hyperledger/fabric-ca/lib/ldap"
+ 	"github.com/hyperledger/fabric-ca/lib/metadata"
+-	idemix "github.com/hyperledger/fabric-ca/lib/server/idemix"
++	"github.com/hyperledger/fabric-ca/lib/server/idemix"
+ 	"github.com/hyperledger/fabric-ca/lib/spi"
+ 	"github.com/hyperledger/fabric-ca/lib/tcert"
+ 	"github.com/hyperledger/fabric-ca/lib/tls"
+@@ -44,6 +44,7 @@ import (
+ 	"github.com/hyperledger/fabric/bccsp"
+ 	"github.com/hyperledger/fabric/common/attrmgr"
+ 	"github.com/pkg/errors"
++	"github.com/swordboy/crypto/sm/sm2"
+ )
+ 
+ const (
+@@ -1155,10 +1156,21 @@ func validateMatchingKeys(cert *x509.Certificate, keyFile string) error {
+ 		if err != nil {
+ 			return err
+ 		}
++		privateKey := privKey.(*ecdsa.PrivateKey)
+ 
+-		if privKey.PublicKey.X.Cmp(pubKey.(*ecdsa.PublicKey).X) != 0 {
++		if privateKey.PublicKey.X.Cmp(pubKey.(*ecdsa.PublicKey).X) != 0 {
+ 			return errors.New("Public key and private key do not match")
+ 		}
++	case *sm2.PublicKey:
++		privKey, err := util.GetECPrivateKey(keyPEM)
++		if err != nil {
++			return err
++		}
++		privateKey := privKey.(*sm2.PrivateKey)
++
++		if privateKey.PublicKey.X.Cmp(pubKey.(*sm2.PublicKey).X) != 0 {
++			return errors.New("SM2 Public key and private key do not match")
++		}
+ 	}
+ 
+ 	return nil
+diff --git a/lib/client/credential/x509/signer.go b/lib/client/credential/x509/signer.go
+index 3e09dd3..5fe6a6e 100644
+--- a/lib/client/credential/x509/signer.go
++++ b/lib/client/credential/x509/signer.go
+@@ -7,7 +7,7 @@ SPDX-License-Identifier: Apache-2.0
+ package x509
+ 
+ import (
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"fmt"
+ 
+ 	"github.com/hyperledger/fabric-ca/util"
+diff --git a/lib/server.go b/lib/server.go
+index 921588a..2f5a956 100644
+--- a/lib/server.go
++++ b/lib/server.go
+@@ -547,7 +547,7 @@ func (s *Server) listenAndServe() (err error) {
+ 
+ 		var certPool *x509.CertPool
+ 		if authType != defaultClientAuth {
+-			certPool, err = LoadPEMCertPool(c.TLS.ClientAuth.CertFiles)
++			certPool, err = LoadOriginalPEMCertPool(c.TLS.ClientAuth.CertFiles)
+ 			if err != nil {
+ 				return err
+ 			}
+diff --git a/lib/serverenroll.go b/lib/serverenroll.go
+index 0611e77..d1c0696 100644
+--- a/lib/serverenroll.go
++++ b/lib/serverenroll.go
+@@ -7,7 +7,7 @@ SPDX-License-Identifier: Apache-2.0
+ package lib
+ 
+ import (
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"encoding/asn1"
+ 	"encoding/pem"
+ 	"time"
+diff --git a/lib/servergencrl.go b/lib/servergencrl.go
+index 0ac50bf..9418094 100644
+--- a/lib/servergencrl.go
++++ b/lib/servergencrl.go
+@@ -7,7 +7,7 @@ SPDX-License-Identifier: Apache-2.0
+ package lib
+ 
+ import (
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"crypto/x509/pkix"
+ 	"encoding/pem"
+ 	"fmt"
+diff --git a/lib/serverrequestcontext.go b/lib/serverrequestcontext.go
+index 9388d11..63512ba 100644
+--- a/lib/serverrequestcontext.go
++++ b/lib/serverrequestcontext.go
+@@ -7,7 +7,7 @@ SPDX-License-Identifier: Apache-2.0
+ package lib
+ 
+ import (
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"encoding/hex"
+ 	"encoding/json"
+ 	"fmt"
+@@ -61,7 +61,7 @@ type serverRequestContextImpl struct {
+ 	enrollmentCert *x509.Certificate
+ 	ui             spi.User
+ 	caller         spi.User
+-	body           struct {
++	body struct {
+ 		read bool   // true after body is read
+ 		buf  []byte // the body itself
+ 		err  error  // any error from reading the body
+diff --git a/lib/tcert/tcert.go b/lib/tcert/tcert.go
+index 66d7266..62c554e 100644
+--- a/lib/tcert/tcert.go
++++ b/lib/tcert/tcert.go
+@@ -21,7 +21,7 @@ import (
+ 	"crypto/hmac"
+ 	"crypto/rand"
+ 	"crypto/sha512"
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"crypto/x509/pkix"
+ 	"encoding/asn1"
+ 	"encoding/base64"
+diff --git a/lib/tcert/util.go b/lib/tcert/util.go
+index 0a9ed39..b8bf258 100644
+--- a/lib/tcert/util.go
++++ b/lib/tcert/util.go
+@@ -23,7 +23,7 @@ import (
+ 	"crypto/ecdsa"
+ 	"crypto/rand"
+ 	"crypto/rsa"
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"encoding/base64"
+ 	"encoding/pem"
+ 	"errors"
+diff --git a/lib/util.go b/lib/util.go
+index 4ac968c..f2753d4 100644
+--- a/lib/util.go
++++ b/lib/util.go
+@@ -8,7 +8,7 @@ package lib
+ 
+ import (
+ 	"crypto/tls"
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"encoding/hex"
+ 	"encoding/json"
+ 	"encoding/pem"
+@@ -20,12 +20,13 @@ import (
+ 	"strings"
+ 
+ 	"github.com/cloudflare/cfssl/log"
+-	"github.com/grantae/certinfo"
++	"github.com/swordboy/crypto/adapter/certinfo"
+ 	"github.com/hyperledger/fabric-ca/api"
+ 	"github.com/hyperledger/fabric-ca/lib/spi"
+ 	"github.com/hyperledger/fabric-ca/util"
+ 	"github.com/pkg/errors"
+ 	"github.com/spf13/viper"
++	originalX509 "crypto/x509"
+ )
+ 
+ var clientAuthTypes = map[string]tls.ClientAuthType{
+@@ -82,6 +83,27 @@ func LoadPEMCertPool(certFiles []string) (*x509.CertPool, error) {
+ 	return certPool, nil
+ }
+ 
++func LoadOriginalPEMCertPool(certFiles []string) (*originalX509.CertPool, error) {
++	certPool := originalX509.NewCertPool()
++
++	if len(certFiles) > 0 {
++		for _, cert := range certFiles {
++			log.Debugf("Reading cert file: %s", cert)
++			pemCerts, err := ioutil.ReadFile(cert)
++			if err != nil {
++				return nil, err
++			}
++
++			log.Debugf("Appending cert %s to pool", cert)
++			if !certPool.AppendCertsFromPEM(pemCerts) {
++				return nil, errors.New("Failed to load cert pool")
++			}
++		}
++	}
++
++	return certPool, nil
++}
++
+ // UnmarshalConfig unmarshals a configuration file
+ func UnmarshalConfig(config interface{}, vp *viper.Viper, configFile string,
+ 	server bool) error {
+diff --git a/rebuild.sh b/rebuild.sh
+index 3d8355e..4fb9f57 100755
+--- a/rebuild.sh
++++ b/rebuild.sh
+@@ -9,8 +9,6 @@ docker run -tid --name test hyperledger/fabric-ca:1.4.0 sleep 3600
+ docker cp ./bin/fabric-ca-server test:/usr/local/bin/
+ docker cp ./bin/fabric-ca-client test:/usr/local/bin/
+ 
+-docker commit test hyperledger/fabric-ca:1.4.0-sm
+-
+-#docker commit -c "CMD fabric-ca-server start -b admin:adminpw" test hyperledger/fabric-ca:1.4.0-sm
++docker commit -c "CMD fabric-ca-server start -b admin:adminpw" test hyperledger/fabric-ca:1.4.0-sm
+ 
+ docker rm -fv test
+diff --git a/util/csp.go b/util/csp.go
+index 2043112..6ec1eed 100644
+--- a/util/csp.go
++++ b/util/csp.go
+@@ -21,7 +21,7 @@ import (
+ 	"crypto/ecdsa"
+ 	"crypto/rsa"
+ 	"crypto/tls"
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"encoding/hex"
+ 	"encoding/pem"
+ 	"fmt"
+@@ -42,6 +42,7 @@ import (
+ 	cspsigner "github.com/hyperledger/fabric/bccsp/signer"
+ 	"github.com/hyperledger/fabric/bccsp/utils"
+ 	"github.com/pkg/errors"
++	"github.com/swordboy/crypto/sm/sm2"
+ )
+ 
+ // GetDefaultBCCSP returns the default BCCSP
+@@ -147,6 +148,9 @@ func getBCCSPKeyOpts(kr csr.KeyRequest, ephemeral bool) (opts bccsp.KeyGenOpts,
+ 			return nil, errors.Errorf("Invalid ECDSA key size: %d", kr.Size())
+ 		}
+ 	case "sm2":
++		if kr.Size() != 256 {
++			return nil, errors.New("sm2 only support key size:256")
++		}
+ 		//fengjj，处理国密证书生成
+ 		return &bccsp.SM2KeyGenOpts{Temporary: ephemeral}, nil
+ 	default:
+@@ -231,7 +235,7 @@ func ImportBCCSPKeyFromPEM(keyFile string, myCSP bccsp.BCCSP, temporary bool) (b
+ 	}
+ 	switch key.(type) {
+ 	case *ecdsa.PrivateKey:
+-		priv, err := utils.PrivateKeyToDER(key.(*ecdsa.PrivateKey))
++		priv, err := utils.PrivateKeyToDER(key)
+ 		if err != nil {
+ 			return nil, errors.WithMessage(err, fmt.Sprintf("Failed to convert ECDSA private key for '%s'", keyFile))
+ 		}
+@@ -251,6 +255,16 @@ func ImportBCCSPKeyFromPEM(keyFile string, myCSP bccsp.BCCSP, temporary bool) (b
+ 		}
+ 		return sk, nil
+ 		//return nil, errors.Errorf("Failed to import RSA key from %s; RSA private key import is not supported", keyFile)
++	case *sm2.PrivateKey:
++		priv, err := utils.PrivateKeyToDER(key)
++		if err != nil {
++			return nil, errors.WithMessage(err, fmt.Sprintf("Failed to convert SM2 private key for '%s'", keyFile))
++		}
++		sk, err := myCSP.KeyImport(priv, &bccsp.SM2PrivateKeyImportOpts{Temporary: temporary})
++		if err != nil {
++			return nil, errors.WithMessage(err, fmt.Sprintf("Failed to import SM2 private key for '%s'", keyFile))
++		}
++		return sk, nil
+ 	default:
+ 		return nil, errors.Errorf("Failed to import key from %s: invalid secret key type", keyFile)
+ 	}
+diff --git a/util/util.go b/util/util.go
+index 8a4d691..1019e51 100644
+--- a/util/util.go
++++ b/util/util.go
+@@ -20,7 +20,7 @@ import (
+ 	"bytes"
+ 	"crypto/ecdsa"
+ 	"crypto/rsa"
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"encoding/asn1"
+ 	"encoding/base64"
+ 	"encoding/json"
+@@ -47,6 +47,7 @@ import (
+ 	"github.com/spf13/viper"
+ 	"github.com/stretchr/testify/assert"
+ 	"golang.org/x/crypto/ocsp"
++	"github.com/swordboy/crypto/sm/sm2"
+ )
+ 
+ var (
+@@ -339,7 +340,7 @@ func DecodeToken(token string) (*x509.Certificate, string, string, error) {
+ }
+ 
+ //GetECPrivateKey get *ecdsa.PrivateKey from key pem
+-func GetECPrivateKey(raw []byte) (*ecdsa.PrivateKey, error) {
++func GetECPrivateKey(raw []byte) (interface{}, error) {
+ 	decoded, _ := pem.Decode(raw)
+ 	if decoded == nil {
+ 		return nil, errors.New("Failed to decode the PEM-encoded ECDSA key")
+@@ -353,6 +354,8 @@ func GetECPrivateKey(raw []byte) (*ecdsa.PrivateKey, error) {
+ 		switch key.(type) {
+ 		case *ecdsa.PrivateKey:
+ 			return key.(*ecdsa.PrivateKey), nil
++		case *sm2.PrivateKey:
++			return key.(*sm2.PrivateKey), nil
+ 		case *rsa.PrivateKey:
+ 			return nil, errors.New("Expecting EC private key but found RSA private key")
+ 		default:
+diff --git a/vendor/github.com/cloudflare/cfssl/config/config.go b/vendor/github.com/cloudflare/cfssl/config/config.go
+index d5eb7c3..ed8fdeb 100644
+--- a/vendor/github.com/cloudflare/cfssl/config/config.go
++++ b/vendor/github.com/cloudflare/cfssl/config/config.go
+@@ -19,6 +19,7 @@ import (
+ 	"github.com/cloudflare/cfssl/helpers"
+ 	"github.com/cloudflare/cfssl/log"
+ 	ocspConfig "github.com/cloudflare/cfssl/ocsp/config"
++	smX509 "github.com/swordboy/crypto/x509"
+ )
+ 
+ // A CSRWhitelist stores booleans for fields in the CSR. If a CSRWhitelist is
+@@ -335,7 +336,7 @@ func (p *Signing) SetClientCertKeyPairFromFile(certFile string, keyFile string)
+ // remote requests
+ func (p *Signing) SetRemoteCAsFromFile(caFile string) error {
+ 	if caFile != "" {
+-		remoteCAs, err := helpers.LoadPEMCertPool(caFile)
++		remoteCAs, err := helpers.LoadOriginalPEMCertPool(caFile)
+ 		if err != nil {
+ 			return err
+ 		}
+@@ -386,7 +387,7 @@ func (p *Signing) NeedsLocalSigner() bool {
+ // Usages parses the list of key uses in the profile, translating them
+ // to a list of X.509 key usages and extended key usages.  The unknown
+ // uses are collected into a slice that is also returned.
+-func (p *SigningProfile) Usages() (ku x509.KeyUsage, eku []x509.ExtKeyUsage, unk []string) {
++func (p *SigningProfile) Usages() (ku smX509.KeyUsage, eku []smX509.ExtKeyUsage, unk []string) {
+ 	for _, keyUse := range p.Usage {
+ 		if kuse, ok := KeyUsage[keyUse]; ok {
+ 			ku |= kuse
+@@ -550,35 +551,35 @@ func (p *Signing) Valid() bool {
+ }
+ 
+ // KeyUsage contains a mapping of string names to key usages.
+-var KeyUsage = map[string]x509.KeyUsage{
+-	"signing":             x509.KeyUsageDigitalSignature,
+-	"digital signature":   x509.KeyUsageDigitalSignature,
+-	"content committment": x509.KeyUsageContentCommitment,
+-	"key encipherment":    x509.KeyUsageKeyEncipherment,
+-	"key agreement":       x509.KeyUsageKeyAgreement,
+-	"data encipherment":   x509.KeyUsageDataEncipherment,
+-	"cert sign":           x509.KeyUsageCertSign,
+-	"crl sign":            x509.KeyUsageCRLSign,
+-	"encipher only":       x509.KeyUsageEncipherOnly,
+-	"decipher only":       x509.KeyUsageDecipherOnly,
++var KeyUsage = map[string]smX509.KeyUsage{
++	"signing":             smX509.KeyUsageDigitalSignature,
++	"digital signature":   smX509.KeyUsageDigitalSignature,
++	"content committment": smX509.KeyUsageContentCommitment,
++	"key encipherment":    smX509.KeyUsageKeyEncipherment,
++	"key agreement":       smX509.KeyUsageKeyAgreement,
++	"data encipherment":   smX509.KeyUsageDataEncipherment,
++	"cert sign":           smX509.KeyUsageCertSign,
++	"crl sign":            smX509.KeyUsageCRLSign,
++	"encipher only":       smX509.KeyUsageEncipherOnly,
++	"decipher only":       smX509.KeyUsageDecipherOnly,
+ }
+ 
+ // ExtKeyUsage contains a mapping of string names to extended key
+ // usages.
+-var ExtKeyUsage = map[string]x509.ExtKeyUsage{
+-	"any":              x509.ExtKeyUsageAny,
+-	"server auth":      x509.ExtKeyUsageServerAuth,
+-	"client auth":      x509.ExtKeyUsageClientAuth,
+-	"code signing":     x509.ExtKeyUsageCodeSigning,
+-	"email protection": x509.ExtKeyUsageEmailProtection,
+-	"s/mime":           x509.ExtKeyUsageEmailProtection,
+-	"ipsec end system": x509.ExtKeyUsageIPSECEndSystem,
+-	"ipsec tunnel":     x509.ExtKeyUsageIPSECTunnel,
+-	"ipsec user":       x509.ExtKeyUsageIPSECUser,
+-	"timestamping":     x509.ExtKeyUsageTimeStamping,
+-	"ocsp signing":     x509.ExtKeyUsageOCSPSigning,
+-	"microsoft sgc":    x509.ExtKeyUsageMicrosoftServerGatedCrypto,
+-	"netscape sgc":     x509.ExtKeyUsageNetscapeServerGatedCrypto,
++var ExtKeyUsage = map[string]smX509.ExtKeyUsage{
++	"any":              smX509.ExtKeyUsageAny,
++	"server auth":      smX509.ExtKeyUsageServerAuth,
++	"client auth":      smX509.ExtKeyUsageClientAuth,
++	"code signing":     smX509.ExtKeyUsageCodeSigning,
++	"email protection": smX509.ExtKeyUsageEmailProtection,
++	"s/mime":           smX509.ExtKeyUsageEmailProtection,
++	"ipsec end system": smX509.ExtKeyUsageIPSECEndSystem,
++	"ipsec tunnel":     smX509.ExtKeyUsageIPSECTunnel,
++	"ipsec user":       smX509.ExtKeyUsageIPSECUser,
++	"timestamping":     smX509.ExtKeyUsageTimeStamping,
++	"ocsp signing":     smX509.ExtKeyUsageOCSPSigning,
++	"microsoft sgc":    smX509.ExtKeyUsageMicrosoftServerGatedCrypto,
++	"netscape sgc":     smX509.ExtKeyUsageNetscapeServerGatedCrypto,
+ }
+ 
+ // An AuthKey contains an entry for a key used for authentication.
+diff --git a/vendor/github.com/cloudflare/cfssl/crl/crl.go b/vendor/github.com/cloudflare/cfssl/crl/crl.go
+index b578a58..ecc946e 100644
+--- a/vendor/github.com/cloudflare/cfssl/crl/crl.go
++++ b/vendor/github.com/cloudflare/cfssl/crl/crl.go
+@@ -4,7 +4,7 @@ package crl
+ import (
+ 	"crypto"
+ 	"crypto/rand"
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"crypto/x509/pkix"
+ 	"math/big"
+ 	"os"
+diff --git a/vendor/github.com/cloudflare/cfssl/csr/csr.go b/vendor/github.com/cloudflare/cfssl/csr/csr.go
+index 43ec24a..e4d45f1 100644
+--- a/vendor/github.com/cloudflare/cfssl/csr/csr.go
++++ b/vendor/github.com/cloudflare/cfssl/csr/csr.go
+@@ -7,7 +7,7 @@ import (
+ 	"crypto/elliptic"
+ 	"crypto/rand"
+ 	"crypto/rsa"
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"crypto/x509/pkix"
+ 	"encoding/asn1"
+ 	"encoding/pem"
+@@ -19,12 +19,14 @@ import (
+ 	cferr "github.com/cloudflare/cfssl/errors"
+ 	"github.com/cloudflare/cfssl/helpers"
+ 	"github.com/cloudflare/cfssl/log"
++	"github.com/swordboy/crypto/sm/sm2"
+ )
+ 
+ const (
+-	curveP256 = 256
+-	curveP384 = 384
+-	curveP521 = 521
++	curveP256    = 256
++	curveP384    = 384
++	curveP521    = 521
++	curveSM2P256 = 256
+ )
+ 
+ // A Name contains the SubjectInfo fields.
+@@ -92,6 +94,9 @@ func (kr *BasicKeyRequest) Generate() (crypto.PrivateKey, error) {
+ 			return nil, errors.New("invalid curve")
+ 		}
+ 		return ecdsa.GenerateKey(curve, rand.Reader)
++	case "sm2":
++		//国密总是使用P256曲线
++		return sm2.GenerateKey(rand.Reader)
+ 	default:
+ 		return nil, errors.New("invalid algorithm")
+ 	}
+@@ -123,6 +128,8 @@ func (kr *BasicKeyRequest) SigAlgo() x509.SignatureAlgorithm {
+ 		default:
+ 			return x509.ECDSAWithSHA1
+ 		}
++	case "sm2":
++		return x509.SM2WithSM3
+ 	default:
+ 		return x509.UnknownSignatureAlgorithm
+ 	}
+@@ -221,6 +228,17 @@ func ParseRequest(req *CertificateRequest) (csr, key []byte, err error) {
+ 			Bytes: key,
+ 		}
+ 		key = pem.EncodeToMemory(&block)
++	case *sm2.PrivateKey:
++		key, err = x509.MarshalECPrivateKey(priv)
++		if err != nil {
++			err = cferr.Wrap(cferr.PrivateKeyError, cferr.Unknown, err)
++			return
++		}
++		block := pem.Block{
++			Type:  "EC PRIVATE KEY",
++			Bytes: key,
++		}
++		key = pem.EncodeToMemory(&block)
+ 	default:
+ 		panic("Generate should have failed to produce a valid key.")
+ 	}
+diff --git a/vendor/github.com/cloudflare/cfssl/helpers/helpers.go b/vendor/github.com/cloudflare/cfssl/helpers/helpers.go
+index c950607..42c26aa 100644
+--- a/vendor/github.com/cloudflare/cfssl/helpers/helpers.go
++++ b/vendor/github.com/cloudflare/cfssl/helpers/helpers.go
+@@ -9,7 +9,7 @@ import (
+ 	"crypto/elliptic"
+ 	"crypto/rsa"
+ 	"crypto/tls"
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"crypto/x509/pkix"
+ 	"encoding/asn1"
+ 	"encoding/binary"
+@@ -27,11 +27,11 @@ import (
+ 	"strings"
+ 	"time"
+ 
+-	"github.com/cloudflare/cfssl/crypto/pkcs7"
+ 	cferr "github.com/cloudflare/cfssl/errors"
+ 	"github.com/cloudflare/cfssl/helpers/derhelpers"
+ 	"github.com/cloudflare/cfssl/log"
+-	"golang.org/x/crypto/pkcs12"
++	originalX509 "crypto/x509"
++	"github.com/swordboy/crypto/sm/sm2"
+ )
+ 
+ // OneYear is a time.Duration representing a year's worth of seconds.
+@@ -63,6 +63,8 @@ func KeyLength(key interface{}) int {
+ 		return ecdsaKey.Curve.Params().BitSize
+ 	} else if rsaKey, ok := key.(*rsa.PublicKey); ok {
+ 		return rsaKey.N.BitLen()
++	} else if sm2Key, ok := key.(*sm2.PublicKey); ok {
++		return sm2Key.Curve.Params().BitSize
+ 	}
+ 
+ 	return 0
+@@ -147,6 +149,12 @@ func SignatureString(alg x509.SignatureAlgorithm) string {
+ 		return "ECDSAWithSHA384"
+ 	case x509.ECDSAWithSHA512:
+ 		return "ECDSAWithSHA512"
++	case x509.SM2WithSHA1:
++		return "SM2WithSHA1"
++	case x509.SM2WithSM3:
++		return "SM2WithSM3"
++	case x509.SM2WithSHA256:
++		return "SM2WithSHA256"
+ 	default:
+ 		return "Unknown Signature"
+ 	}
+@@ -180,6 +188,8 @@ func HashAlgoString(alg x509.SignatureAlgorithm) string {
+ 		return "SHA384"
+ 	case x509.ECDSAWithSHA512:
+ 		return "SHA512"
++	case x509.SM2WithSM3:
++		return "SM3"
+ 	default:
+ 		return "Unknown Hash Algorithm"
+ 	}
+@@ -231,19 +241,30 @@ func ParseCertificatesPEM(certsPEM []byte) ([]*x509.Certificate, error) {
+ // either PKCS #7, PKCS #12, or raw x509.
+ func ParseCertificatesDER(certsDER []byte, password string) (certs []*x509.Certificate, key crypto.Signer, err error) {
+ 	certsDER = bytes.TrimSpace(certsDER)
++	//TODO: fengjj,现在不想支持pkcs12、PKCS7格式证书
++	certs, err = x509.ParseCertificates(certsDER)
++	if err != nil {
++		return nil, nil, cferr.New(cferr.CertificateError, cferr.DecodeFailed)
++	}
++	return certs, key, nil
++	/*
+ 	pkcs7data, err := pkcs7.ParsePKCS7(certsDER)
+ 	if err != nil {
+ 		var pkcs12data interface{}
+ 		certs = make([]*x509.Certificate, 1)
+-		pkcs12data, certs[0], err = pkcs12.Decode(certsDER, password)
++
+ 		if err != nil {
+-			certs, err = x509.ParseCertificates(certsDER)
+-			if err != nil {
+-				return nil, nil, cferr.New(cferr.CertificateError, cferr.DecodeFailed)
+-			}
+-		} else {
+-			key = pkcs12data.(crypto.Signer)
++			return nil, nil, cferr.New(cferr.CertificateError, cferr.DecodeFailed)
+ 		}
++		//pkcs12data, certs[0], err = pkcs12.Decode(certsDER, password)
++		//if err != nil {
++		//	certs, err = x509.ParseCertificates(certsDER)
++		//	if err != nil {
++		//		return nil, nil, cferr.New(cferr.CertificateError, cferr.DecodeFailed)
++		//	}
++		//} else {
++		//	key = pkcs12data.(crypto.Signer)
++		//}
+ 	} else {
+ 		if pkcs7data.ContentInfo != "SignedData" {
+ 			return nil, nil, cferr.Wrap(cferr.CertificateError, cferr.DecodeFailed, errors.New("can only extract certificates from signed data content info"))
+@@ -254,6 +275,7 @@ func ParseCertificatesDER(certsDER []byte, password string) (certs []*x509.Certi
+ 		return nil, key, cferr.New(cferr.CertificateError, cferr.DecodeFailed)
+ 	}
+ 	return certs, key, nil
++	*/
+ }
+ 
+ // ParseSelfSignedCertificatePEM parses a PEM-encoded certificate and check if it is self-signed.
+@@ -301,18 +323,20 @@ func ParseOneCertificateFromPEM(certsPEM []byte) ([]*x509.Certificate, []byte, e
+ 
+ 	cert, err := x509.ParseCertificate(block.Bytes)
+ 	if err != nil {
+-		pkcs7data, err := pkcs7.ParsePKCS7(block.Bytes)
+-		if err != nil {
+-			return nil, rest, err
+-		}
+-		if pkcs7data.ContentInfo != "SignedData" {
+-			return nil, rest, errors.New("only PKCS #7 Signed Data Content Info supported for certificate parsing")
+-		}
+-		certs := pkcs7data.Content.SignedData.Certificates
+-		if certs == nil {
+-			return nil, rest, errors.New("PKCS #7 structure contains no certificates")
+-		}
+-		return certs, rest, nil
++		return nil, rest, errors.New("can't parse one certificate")
++		//TODO: fengjj，现在不考虑支持PKCS7格式证书
++		//pkcs7data, err := pkcs7.ParsePKCS7(block.Bytes)
++		//if err != nil {
++		//	return nil, rest, err
++		//}
++		//if pkcs7data.ContentInfo != "SignedData" {
++		//	return nil, rest, errors.New("only PKCS #7 Signed Data Content Info supported for certificate parsing")
++		//}
++		//certs := pkcs7data.Content.SignedData.Certificates
++		//if certs == nil {
++		//	return nil, rest, errors.New("PKCS #7 structure contains no certificates")
++		//}
++		//return certs, rest, nil
+ 	}
+ 	var certs = []*x509.Certificate{cert}
+ 	return certs, rest, nil
+@@ -331,6 +355,32 @@ func LoadPEMCertPool(certsFile string) (*x509.CertPool, error) {
+ 	return PEMToCertPool(pemCerts)
+ }
+ 
++func LoadOriginalPEMCertPool(certsFile string) (*originalX509.CertPool, error) {
++	if certsFile == "" {
++		return nil, nil
++	}
++	pemCerts, err := ioutil.ReadFile(certsFile)
++	if err != nil {
++		return nil, err
++	}
++
++	return OriginalPEMToCertPool(pemCerts)
++}
++
++// PEMToCertPool concerts PEM certificates to a CertPool.
++func OriginalPEMToCertPool(pemCerts []byte) (*originalX509.CertPool, error) {
++	if len(pemCerts) == 0 {
++		return nil, nil
++	}
++
++	certPool := originalX509.NewCertPool()
++	if !certPool.AppendCertsFromPEM(pemCerts) {
++		return nil, errors.New("failed to load cert pool")
++	}
++
++	return certPool, nil
++}
++
+ // PEMToCertPool concerts PEM certificates to a CertPool.
+ func PEMToCertPool(pemCerts []byte) (*x509.CertPool, error) {
+ 	if len(pemCerts) == 0 {
+@@ -451,6 +501,8 @@ func SignerAlgo(priv crypto.Signer) x509.SignatureAlgorithm {
+ 		default:
+ 			return x509.ECDSAWithSHA1
+ 		}
++	case *sm2.PublicKey:
++		return x509.SM2WithSM3
+ 	default:
+ 		return x509.UnknownSignatureAlgorithm
+ 	}
+@@ -471,7 +523,7 @@ func LoadClientCertificate(certFile string, keyFile string) (*tls.Certificate, e
+ }
+ 
+ // CreateTLSConfig creates a tls.Config object from certs and roots
+-func CreateTLSConfig(remoteCAs *x509.CertPool, cert *tls.Certificate) *tls.Config {
++func CreateTLSConfig(remoteCAs *originalX509.CertPool, cert *tls.Certificate) *tls.Config {
+ 	var certs []tls.Certificate
+ 	if cert != nil {
+ 		certs = []tls.Certificate{*cert}
+diff --git a/vendor/github.com/cloudflare/cfssl/initca/initca.go b/vendor/github.com/cloudflare/cfssl/initca/initca.go
+index 5591906..253c405 100644
+--- a/vendor/github.com/cloudflare/cfssl/initca/initca.go
++++ b/vendor/github.com/cloudflare/cfssl/initca/initca.go
+@@ -6,7 +6,7 @@ import (
+ 	"crypto"
+ 	"crypto/ecdsa"
+ 	"crypto/rsa"
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"errors"
+ 	"time"
+ 
+diff --git a/vendor/github.com/cloudflare/cfssl/ocsp/ocsp.go b/vendor/github.com/cloudflare/cfssl/ocsp/ocsp.go
+index a78b69c..b8e83e4 100644
+--- a/vendor/github.com/cloudflare/cfssl/ocsp/ocsp.go
++++ b/vendor/github.com/cloudflare/cfssl/ocsp/ocsp.go
+@@ -8,9 +8,8 @@ responder stack for serving pre-signed OCSP responses.
+ package ocsp
+ 
+ import (
+-	"bytes"
+ 	"crypto"
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"crypto/x509/pkix"
+ 	"io/ioutil"
+ 	"strconv"
+@@ -21,6 +20,7 @@ import (
+ 	"github.com/cloudflare/cfssl/helpers"
+ 	"github.com/cloudflare/cfssl/log"
+ 	"golang.org/x/crypto/ocsp"
++	"github.com/pkg/errors"
+ )
+ 
+ // revocationReasonCodes is a map between string reason codes
+@@ -156,58 +156,59 @@ func NewSigner(issuer, responder *x509.Certificate, key crypto.Signer, interval
+ // Sign is used with an OCSP signer to request the issuance of
+ // an OCSP response.
+ func (s StandardSigner) Sign(req SignRequest) ([]byte, error) {
+-	if req.Certificate == nil {
+-		return nil, cferr.New(cferr.OCSPError, cferr.ReadFailed)
+-	}
+-
+-	// Verify that req.Certificate is issued under s.issuer
+-	if bytes.Compare(req.Certificate.RawIssuer, s.issuer.RawSubject) != 0 {
+-		return nil, cferr.New(cferr.OCSPError, cferr.IssuerMismatch)
+-	}
+-	if req.Certificate.CheckSignatureFrom(s.issuer) != nil {
+-		return nil, cferr.New(cferr.OCSPError, cferr.IssuerMismatch)
+-	}
+-
+-	var thisUpdate, nextUpdate time.Time
+-	if req.ThisUpdate != nil {
+-		thisUpdate = *req.ThisUpdate
+-	} else {
+-		// Round thisUpdate times down to the nearest hour
+-		thisUpdate = time.Now().Truncate(time.Hour)
+-	}
+-	if req.NextUpdate != nil {
+-		nextUpdate = *req.NextUpdate
+-	} else {
+-		nextUpdate = thisUpdate.Add(s.interval)
+-	}
+-
+-	status, ok := StatusCode[req.Status]
+-	if !ok {
+-		return nil, cferr.New(cferr.OCSPError, cferr.InvalidStatus)
+-	}
+-
+-	// If the OCSP responder is the same as the issuer, there is no need to
+-	// include any certificate in the OCSP response, which decreases the byte size
+-	// of OCSP responses dramatically.
+-	certificate := s.responder
+-	if s.issuer == s.responder || bytes.Equal(s.issuer.Raw, s.responder.Raw) {
+-		certificate = nil
+-	}
+-
+-	template := ocsp.Response{
+-		Status:          status,
+-		SerialNumber:    req.Certificate.SerialNumber,
+-		ThisUpdate:      thisUpdate,
+-		NextUpdate:      nextUpdate,
+-		Certificate:     certificate,
+-		ExtraExtensions: req.Extensions,
+-		IssuerHash:      req.IssuerHash,
+-	}
+-
+-	if status == ocsp.Revoked {
+-		template.RevokedAt = req.RevokedAt
+-		template.RevocationReason = req.Reason
+-	}
+-
+-	return ocsp.CreateResponse(s.issuer, s.responder, template, s.key)
++	return nil,errors.New("ocsp is not supported")
++	//if req.Certificate == nil {
++	//	return nil, cferr.New(cferr.OCSPError, cferr.ReadFailed)
++	//}
++	//
++	//// Verify that req.Certificate is issued under s.issuer
++	//if bytes.Compare(req.Certificate.RawIssuer, s.issuer.RawSubject) != 0 {
++	//	return nil, cferr.New(cferr.OCSPError, cferr.IssuerMismatch)
++	//}
++	//if req.Certificate.CheckSignatureFrom(s.issuer) != nil {
++	//	return nil, cferr.New(cferr.OCSPError, cferr.IssuerMismatch)
++	//}
++	//
++	//var thisUpdate, nextUpdate time.Time
++	//if req.ThisUpdate != nil {
++	//	thisUpdate = *req.ThisUpdate
++	//} else {
++	//	// Round thisUpdate times down to the nearest hour
++	//	thisUpdate = time.Now().Truncate(time.Hour)
++	//}
++	//if req.NextUpdate != nil {
++	//	nextUpdate = *req.NextUpdate
++	//} else {
++	//	nextUpdate = thisUpdate.Add(s.interval)
++	//}
++	//
++	//status, ok := StatusCode[req.Status]
++	//if !ok {
++	//	return nil, cferr.New(cferr.OCSPError, cferr.InvalidStatus)
++	//}
++	//
++	//// If the OCSP responder is the same as the issuer, there is no need to
++	//// include any certificate in the OCSP response, which decreases the byte size
++	//// of OCSP responses dramatically.
++	//certificate := s.responder
++	//if s.issuer == s.responder || bytes.Equal(s.issuer.Raw, s.responder.Raw) {
++	//	certificate = nil
++	//}
++	//
++	//template := ocsp.Response{
++	//	Status:          status,
++	//	SerialNumber:    req.Certificate.SerialNumber,
++	//	ThisUpdate:      thisUpdate,
++	//	NextUpdate:      nextUpdate,
++	//	Certificate:     certificate,
++	//	ExtraExtensions: req.Extensions,
++	//	IssuerHash:      req.IssuerHash,
++	//}
++	//
++	//if status == ocsp.Revoked {
++	//	template.RevokedAt = req.RevokedAt
++	//	template.RevocationReason = req.Reason
++	//}
++	//
++	//return ocsp.CreateResponse(s.issuer, s.responder, template, s.key)
+ }
+diff --git a/vendor/github.com/cloudflare/cfssl/revoke/revoke.go b/vendor/github.com/cloudflare/cfssl/revoke/revoke.go
+index a598ced..d3b72e4 100644
+--- a/vendor/github.com/cloudflare/cfssl/revoke/revoke.go
++++ b/vendor/github.com/cloudflare/cfssl/revoke/revoke.go
+@@ -4,11 +4,9 @@
+ package revoke
+ 
+ import (
+-	"bytes"
+ 	"crypto"
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"crypto/x509/pkix"
+-	"encoding/base64"
+ 	"encoding/pem"
+ 	"errors"
+ 	"io"
+@@ -220,90 +218,92 @@ var ocspOpts = ocsp.RequestOptions{
+ }
+ 
+ func certIsRevokedOCSP(leaf *x509.Certificate, strict bool) (revoked, ok bool) {
+-	var err error
+-
+-	ocspURLs := leaf.OCSPServer
+-	if len(ocspURLs) == 0 {
+-		// OCSP not enabled for this certificate.
+-		return false, true
+-	}
+-
+-	issuer := getIssuer(leaf)
+-
+-	if issuer == nil {
+-		return false, false
+-	}
+-
+-	ocspRequest, err := ocsp.CreateRequest(leaf, issuer, &ocspOpts)
+-	if err != nil {
+-		return
+-	}
+-
+-	for _, server := range ocspURLs {
+-		resp, err := sendOCSPRequest(server, ocspRequest, leaf, issuer)
+-		if err != nil {
+-			if strict {
+-				return
+-			}
+-			continue
+-		}
+-
+-		// There wasn't an error fetching the OCSP status.
+-		ok = true
+-
+-		if resp.Status != ocsp.Good {
+-			// The certificate was revoked.
+-			revoked = true
+-		}
+-
+-		return
+-	}
+-	return
++	//TODO: fengjj,当前不支持OCSP吊销证书
++	return false,true
++	//var err error
++	//
++	//ocspURLs := leaf.OCSPServer
++	//if len(ocspURLs) == 0 {
++	//	// OCSP not enabled for this certificate.
++	//	return false, true
++	//}
++	//
++	//issuer := getIssuer(leaf)
++	//
++	//if issuer == nil {
++	//	return false, false
++	//}
++	//
++	//ocspRequest, err := ocsp.CreateRequest(leaf, issuer, &ocspOpts)
++	//if err != nil {
++	//	return
++	//}
++	//
++	//for _, server := range ocspURLs {
++	//	resp, err := sendOCSPRequest(server, ocspRequest, leaf, issuer)
++	//	if err != nil {
++	//		if strict {
++	//			return
++	//		}
++	//		continue
++	//	}
++	//
++	//	// There wasn't an error fetching the OCSP status.
++	//	ok = true
++	//
++	//	if resp.Status != ocsp.Good {
++	//		// The certificate was revoked.
++	//		revoked = true
++	//	}
++	//
++	//	return
++	//}
++	//return
+ }
+ 
+ // sendOCSPRequest attempts to request an OCSP response from the
+ // server. The error only indicates a failure to *fetch* the
+ // certificate, and *does not* mean the certificate is valid.
+-func sendOCSPRequest(server string, req []byte, leaf, issuer *x509.Certificate) (*ocsp.Response, error) {
+-	var resp *http.Response
+-	var err error
+-	if len(req) > 256 {
+-		buf := bytes.NewBuffer(req)
+-		resp, err = http.Post(server, "application/ocsp-request", buf)
+-	} else {
+-		reqURL := server + "/" + base64.StdEncoding.EncodeToString(req)
+-		resp, err = http.Get(reqURL)
+-	}
+-
+-	if err != nil {
+-		return nil, err
+-	}
+-
+-	if resp.StatusCode != http.StatusOK {
+-		return nil, errors.New("failed to retrieve OSCP")
+-	}
+-
+-	body, err := ocspRead(resp.Body)
+-	if err != nil {
+-		return nil, err
+-	}
+-	resp.Body.Close()
+-
+-	switch {
+-	case bytes.Equal(body, ocsp.UnauthorizedErrorResponse):
+-		return nil, errors.New("OSCP unauthorized")
+-	case bytes.Equal(body, ocsp.MalformedRequestErrorResponse):
+-		return nil, errors.New("OSCP malformed")
+-	case bytes.Equal(body, ocsp.InternalErrorErrorResponse):
+-		return nil, errors.New("OSCP internal error")
+-	case bytes.Equal(body, ocsp.TryLaterErrorResponse):
+-		return nil, errors.New("OSCP try later")
+-	case bytes.Equal(body, ocsp.SigRequredErrorResponse):
+-		return nil, errors.New("OSCP signature required")
+-	}
+-
+-	return ocsp.ParseResponseForCert(body, leaf, issuer)
+-}
++//func sendOCSPRequest(server string, req []byte, leaf, issuer *x509.Certificate) (*ocsp.Response, error) {
++//	var resp *http.Response
++//	var err error
++//	if len(req) > 256 {
++//		buf := bytes.NewBuffer(req)
++//		resp, err = http.Post(server, "application/ocsp-request", buf)
++//	} else {
++//		reqURL := server + "/" + base64.StdEncoding.EncodeToString(req)
++//		resp, err = http.Get(reqURL)
++//	}
++//
++//	if err != nil {
++//		return nil, err
++//	}
++//
++//	if resp.StatusCode != http.StatusOK {
++//		return nil, errors.New("failed to retrieve OSCP")
++//	}
++//
++//	body, err := ocspRead(resp.Body)
++//	if err != nil {
++//		return nil, err
++//	}
++//	resp.Body.Close()
++//
++//	switch {
++//	case bytes.Equal(body, ocsp.UnauthorizedErrorResponse):
++//		return nil, errors.New("OSCP unauthorized")
++//	case bytes.Equal(body, ocsp.MalformedRequestErrorResponse):
++//		return nil, errors.New("OSCP malformed")
++//	case bytes.Equal(body, ocsp.InternalErrorErrorResponse):
++//		return nil, errors.New("OSCP internal error")
++//	case bytes.Equal(body, ocsp.TryLaterErrorResponse):
++//		return nil, errors.New("OSCP try later")
++//	case bytes.Equal(body, ocsp.SigRequredErrorResponse):
++//		return nil, errors.New("OSCP signature required")
++//	}
++//
++//	return ocsp.ParseResponseForCert(body, leaf, issuer)
++//}
+ 
+ var crlRead = ioutil.ReadAll
+ 
+diff --git a/vendor/github.com/cloudflare/cfssl/signer/local/local.go b/vendor/github.com/cloudflare/cfssl/signer/local/local.go
+index 686deac..47377bc 100644
+--- a/vendor/github.com/cloudflare/cfssl/signer/local/local.go
++++ b/vendor/github.com/cloudflare/cfssl/signer/local/local.go
+@@ -5,7 +5,7 @@ import (
+ 	"bytes"
+ 	"crypto"
+ 	"crypto/rand"
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"crypto/x509/pkix"
+ 	"encoding/asn1"
+ 	"encoding/hex"
+diff --git a/vendor/github.com/cloudflare/cfssl/signer/remote/remote.go b/vendor/github.com/cloudflare/cfssl/signer/remote/remote.go
+index 10c529a..a4570a7 100644
+--- a/vendor/github.com/cloudflare/cfssl/signer/remote/remote.go
++++ b/vendor/github.com/cloudflare/cfssl/signer/remote/remote.go
+@@ -1,7 +1,7 @@
+ package remote
+ 
+ import (
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"encoding/json"
+ 	"errors"
+ 	"net/http"
+diff --git a/vendor/github.com/cloudflare/cfssl/signer/signer.go b/vendor/github.com/cloudflare/cfssl/signer/signer.go
+index 20101f6..57db1c1 100644
+--- a/vendor/github.com/cloudflare/cfssl/signer/signer.go
++++ b/vendor/github.com/cloudflare/cfssl/signer/signer.go
+@@ -7,7 +7,7 @@ import (
+ 	"crypto/elliptic"
+ 	"crypto/rsa"
+ 	"crypto/sha1"
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"crypto/x509/pkix"
+ 	"encoding/asn1"
+ 	"errors"
+@@ -21,6 +21,7 @@ import (
+ 	"github.com/cloudflare/cfssl/csr"
+ 	cferr "github.com/cloudflare/cfssl/errors"
+ 	"github.com/cloudflare/cfssl/info"
++	"github.com/swordboy/crypto/sm/sm2"
+ )
+ 
+ // Subject contains the information that should be used to override the
+@@ -158,6 +159,13 @@ func DefaultSigAlgo(priv crypto.Signer) x509.SignatureAlgorithm {
+ 		default:
+ 			return x509.ECDSAWithSHA1
+ 		}
++	case *sm2.PublicKey:
++		switch pub.Curve {
++		case sm2.P256Sm2():
++			return x509.SM2WithSM3
++		default:
++			return x509.SM2WithSHA256
++		}
+ 	default:
+ 		return x509.UnknownSignatureAlgorithm
+ 	}
+diff --git a/vendor/github.com/cloudflare/cfssl/signer/universal/universal.go b/vendor/github.com/cloudflare/cfssl/signer/universal/universal.go
+index 7c8c59d..ded8df0 100644
+--- a/vendor/github.com/cloudflare/cfssl/signer/universal/universal.go
++++ b/vendor/github.com/cloudflare/cfssl/signer/universal/universal.go
+@@ -2,7 +2,7 @@
+ package universal
+ 
+ import (
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"net/http"
+ 
+ 	"github.com/cloudflare/cfssl/certdb"
+diff --git a/vendor/github.com/hyperledger/fabric/bccsp/gm/keys.go b/vendor/github.com/hyperledger/fabric/bccsp/gm/keys.go
+index cbba979..219e737 100644
+--- a/vendor/github.com/hyperledger/fabric/bccsp/gm/keys.go
++++ b/vendor/github.com/hyperledger/fabric/bccsp/gm/keys.go
+@@ -53,7 +53,8 @@ var (
+ )
+ 
+ var oidPublicKeyECDSA = asn1.ObjectIdentifier{1, 2, 840, 10045, 2, 1}
+-var oidPublicKeySM2 = asn1.ObjectIdentifier{1, 2, 840, 10045, 2, 1}
++//SM公钥算法的OID
++var oidPublicKeySM2 = asn1.ObjectIdentifier{1, 2, 156, 197, 301, 1}
+ 
+ func oidFromNamedCurve(curve elliptic.Curve) (asn1.ObjectIdentifier, bool) {
+ 	switch curve {
+diff --git a/vendor/github.com/hyperledger/fabric/bccsp/utils/keys.go b/vendor/github.com/hyperledger/fabric/bccsp/utils/keys.go
+index c6662cf..6e64fdd 100644
+--- a/vendor/github.com/hyperledger/fabric/bccsp/utils/keys.go
++++ b/vendor/github.com/hyperledger/fabric/bccsp/utils/keys.go
+@@ -21,11 +21,12 @@ import (
+ 	"crypto/elliptic"
+ 	"crypto/rand"
+ 	"crypto/rsa"
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"encoding/asn1"
+ 	"encoding/pem"
+ 	"errors"
+ 	"fmt"
++	"github.com/swordboy/crypto/sm/sm2"
+ )
+ 
+ // struct to hold info required for PKCS#8
+@@ -66,7 +67,7 @@ func oidFromNamedCurve(curve elliptic.Curve) (asn1.ObjectIdentifier, bool) {
+ }
+ 
+ // PrivateKeyToDER marshals a private key to der
+-func PrivateKeyToDER(privateKey *ecdsa.PrivateKey) ([]byte, error) {
++func PrivateKeyToDER(privateKey interface{}) ([]byte, error) {
+ 	if privateKey == nil {
+ 		return nil, errors.New("Invalid ecdsa private key. It must be different from nil.")
+ 	}
+@@ -83,7 +84,6 @@ func RsaPrivateKeyToDER(privateKey *rsa.PrivateKey) ([]byte, error) {
+ 	return x509.MarshalPKCS1PrivateKey(privateKey), nil
+ }
+ 
+-
+ // PrivateKeyToPEM converts the private key to PEM format.
+ // EC private keys are converted to PKCS#8 format.
+ // RSA private keys are converted to PKCS#1 format.
+@@ -201,7 +201,7 @@ func DERToPrivateKey(der []byte) (key interface{}, err error) {
+ 
+ 	if key, err = x509.ParsePKCS8PrivateKey(der); err == nil {
+ 		switch key.(type) {
+-		case *rsa.PrivateKey, *ecdsa.PrivateKey:
++		case *rsa.PrivateKey, *ecdsa.PrivateKey, *sm2.PrivateKey:
+ 			return
+ 		default:
+ 			return nil, errors.New("Found unknown private key type in PKCS#8 wrapping")
+diff --git a/vendor/github.com/hyperledger/fabric/common/attrmgr/attrmgr.go b/vendor/github.com/hyperledger/fabric/common/attrmgr/attrmgr.go
+index a85fbd0..140709e 100644
+--- a/vendor/github.com/hyperledger/fabric/common/attrmgr/attrmgr.go
++++ b/vendor/github.com/hyperledger/fabric/common/attrmgr/attrmgr.go
+@@ -22,7 +22,7 @@ limitations under the License.
+ package attrmgr
+ 
+ import (
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"crypto/x509/pkix"
+ 	"encoding/asn1"
+ 	"encoding/json"
+-- 
+2.20.1.windows.1
+

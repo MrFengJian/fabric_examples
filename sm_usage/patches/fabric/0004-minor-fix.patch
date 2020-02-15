@@ -1,0 +1,354 @@
+From 82bef9e3a9373d5a1547950db8b5346d4aae72fd Mon Sep 17 00:00:00 2001
+From: fengjianjian <fengjj@7zhilu.com>
+Date: Mon, 11 Feb 2019 10:19:02 +0800
+Subject: [PATCH 4/4] =?UTF-8?q?minor=20fix=20=E4=B8=8D=E4=BD=BF=E7=94=A8pl?=
+ =?UTF-8?q?ugin=E6=96=B9=E6=A1=88=EF=BC=8C?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ Makefile                                  |  2 +-
+ bccsp/factory/pluginfactory.go            |  4 +-
+ bccsp/gm/impl.go                          |  7 ++-
+ common/tools/cryptogen/csp/cspsm.go       | 75 ++++++++---------------
+ common/tools/cryptogen/mainsm.go          | 22 +++++--
+ common/tools/cryptogen/msp/generatorsm.go | 25 +++++++-
+ common/tools/cryptogen/msp/msp_test.go    | 18 +++---
+ 7 files changed, 81 insertions(+), 72 deletions(-)
+
+diff --git a/Makefile b/Makefile
+index 92f6b6ea0..15864e664 100755
+--- a/Makefile
++++ b/Makefile
+@@ -162,7 +162,7 @@ configtxgen: GO_LDFLAGS=-X $(pkgmap.$(@F))/metadata.CommitSHA=$(EXTRA_VERSION)
+ configtxgen: $(BUILD_DIR)/bin/configtxgen
+ 
+ configtxlator: GO_LDFLAGS=-X $(pkgmap.$(@F))/metadata.CommitSHA=$(EXTRA_VERSION)
+-configtxlator: $(BUIsssssssszLD_DIR)/bin/configtxlator
++configtxlator: $(BUILD_DIR)/bin/configtxlator
+ 
+ cryptogen: GO_LDFLAGS=-X $(pkgmap.$(@F))/metadata.CommitSHA=$(EXTRA_VERSION)
+ cryptogen: $(BUILD_DIR)/bin/cryptogen
+diff --git a/bccsp/factory/pluginfactory.go b/bccsp/factory/pluginfactory.go
+index 3870bbcd0..70c6e8ab8 100644
+--- a/bccsp/factory/pluginfactory.go
++++ b/bccsp/factory/pluginfactory.go
+@@ -65,10 +65,10 @@ func (f *PluginFactory) Get(config *FactoryOpts) (bccsp.BCCSP, error) {
+ 	}
+ 
+ 	// check to make sure symbol New meets the required function signature
+-	new, ok := sym.(func(config map[string]interface{}) (bccsp.BCCSP, error))
++	newFunc, ok := sym.(func(config map[string]interface{}) (bccsp.BCCSP, error))
+ 	if !ok {
+ 		return nil, fmt.Errorf("Plugin does not implement the required function signature for 'New'")
+ 	}
+ 
+-	return new(config.PluginOpts.Config)
++	return newFunc(config.PluginOpts.Config)
+ }
+diff --git a/bccsp/gm/impl.go b/bccsp/gm/impl.go
+index f818aec15..78be05647 100644
+--- a/bccsp/gm/impl.go
++++ b/bccsp/gm/impl.go
+@@ -79,18 +79,19 @@ func New(keystore string) (bccsp.BCCSP, error) {
+ 
+ 	keyStorePath, err := getKeyStoreDir(keystore)
+ 	if err != nil {
+-		return  nil, err
++		return nil, err
+ 	}
+ 
+-	if keyStorePath == ""{
++	if keyStorePath == "" {
+ 		ks = sw.NewDummyKeyStore()
+-		swCsp,err = sw.NewDefaultSecurityLevelWithKeystore(ks)
++		swCsp, err = sw.NewDefaultSecurityLevelWithKeystore(ks)
+ 		if err != nil {
+ 			return nil, err
+ 		}
+ 		return &impl{sw: swCsp, ks: ks}, nil
+ 	}
+ 
++	//TODO: hash算法设置？？？是否可以使用SM3
+ 	swCsp, err = sw.NewDefaultSecurityLevel(keyStorePath)
+ 	if err != nil {
+ 		return nil, err
+diff --git a/common/tools/cryptogen/csp/cspsm.go b/common/tools/cryptogen/csp/cspsm.go
+index 933f208ab..4df9c70dc 100644
+--- a/common/tools/cryptogen/csp/cspsm.go
++++ b/common/tools/cryptogen/csp/cspsm.go
+@@ -81,10 +81,17 @@ func GeneratePrivateKey(keystorePath, sigAlgo, pluginPath string) (bccsp.Key, cr
+ 
+ 	var priv bccsp.Key
+ 	var s crypto.Signer
+-
+-	switch sigAlgo {
+-	case "ecdsa":
+-		opts := &factory.FactoryOpts{
++	var opts *factory.FactoryOpts
++	if pluginPath != "" {
++		opts = &factory.FactoryOpts{
++			ProviderName: "PLUGIN",
++			PluginOpts: &factory.PluginOpts{
++				Library: pluginPath,
++				Config:  map[string]interface{}{"keyStore": keystorePath},
++			},
++		}
++	} else {
++		opts = &factory.FactoryOpts{
+ 			ProviderName: "SW",
+ 			SwOpts: &factory.SwOpts{
+ 				HashFamily: "SHA2",
+@@ -95,52 +102,24 @@ func GeneratePrivateKey(keystorePath, sigAlgo, pluginPath string) (bccsp.Key, cr
+ 				},
+ 			},
+ 		}
+-		csp, err := factory.GetBCCSPFromOpts(opts)
+-		if err == nil {
+-			// generate a key
+-			priv, err = csp.KeyGen(&bccsp.ECDSAP256KeyGenOpts{Temporary: false})
+-			if err == nil {
+-				// create a crypto.Signer
+-				s, err = signer.New(csp, priv)
+-			}
+-		}
+-		return priv, s, err
++	}
++	csp, err := factory.GetBCCSPFromOpts(opts)
++	var keyGenOpts bccsp.KeyGenOpts
++	switch sigAlgo {
++	case "ecdsa":
++		keyGenOpts = &bccsp.ECDSAP256KeyGenOpts{Temporary: false}
++	case "rsa":
++		keyGenOpts = &bccsp.RSA2048KeyGenOpts{Temporary: false}
+ 	case "sm2":
+-		var opts *factory.FactoryOpts
+-		if pluginPath != "" {
+-			opts = &factory.FactoryOpts{
+-				ProviderName: "PLUGIN",
+-				PluginOpts: &factory.PluginOpts{
+-					Library: pluginPath,
+-					Config:  map[string]interface{}{"keyStore": keystorePath},
+-				},
+-			}
+-		} else { // set to default SW (which fitted for sm) when pluginPath is not set
+-			opts = &factory.FactoryOpts{
+-				ProviderName: "SW",
+-				SwOpts: &factory.SwOpts{
+-					HashFamily: "SHA2",
+-					SecLevel:   256,
+-
+-					FileKeystore: &factory.FileKeystoreOpts{
+-						KeyStorePath: keystorePath,
+-					},
+-				},
+-			}
+-		}
+-		csp, err := factory.GetBCCSPFromOpts(opts)
+-		if err == nil {
+-			// generate a key
+-			priv, err = csp.KeyGen(&bccsp.SM2KeyGenOpts{Temporary: false})
+-			if err == nil {
+-				// create a crypto.Signer
+-				s, err = signer.New(csp, priv)
+-			}
+-		}
+-		return priv, s, err
++		keyGenOpts = &bccsp.SM2KeyGenOpts{Temporary: false}
+ 	}
+-	return priv, s, nil
+-
++	// generate a key
++	priv, err = csp.KeyGen(keyGenOpts)
++	if err == nil {
++		// create a crypto.Signer
++		s, err = signer.New(csp, priv)
++	}
++	return priv, s, err
+ }
+ 
+ func GetECPublicKey(priv bccsp.Key) (interface{}, error) {
+diff --git a/common/tools/cryptogen/mainsm.go b/common/tools/cryptogen/mainsm.go
+index 19969014b..664747428 100644
+--- a/common/tools/cryptogen/mainsm.go
++++ b/common/tools/cryptogen/mainsm.go
+@@ -518,19 +518,25 @@ func generatePeerOrg(baseDir string, orgSpec OrgSpec) {
+ 	usersDir := filepath.Join(orgDir, "users")
+ 	adminCertsDir := filepath.Join(mspDir, "admincerts")
+ 	// generate signing CA
+-	signCA, err := ca.NewCA(caDir, orgName, orgSpec.CA.CommonName, orgSpec.CA.Country, orgSpec.CA.Province, orgSpec.CA.Locality, orgSpec.CA.OrganizationalUnit, orgSpec.CA.StreetAddress, orgSpec.CA.PostalCode, *sigAlgo, *pluginPath)
++	// do not use plugin schema
++	signCA, err := ca.NewCA(caDir, orgName, orgSpec.CA.CommonName, orgSpec.CA.Country, orgSpec.CA.Province, orgSpec.CA.Locality, orgSpec.CA.OrganizationalUnit, orgSpec.CA.StreetAddress, orgSpec.CA.PostalCode, *sigAlgo, "")
+ 	if err != nil {
+ 		fmt.Printf("Error generating signCA for org %s:\n%v\n", orgName, err)
+ 		os.Exit(1)
+ 	}
+ 	// generate TLS CA
+-	tlsCA, err := ca.NewCA(tlsCADir, orgName, "tls"+orgSpec.CA.CommonName, orgSpec.CA.Country, orgSpec.CA.Province, orgSpec.CA.Locality, orgSpec.CA.OrganizationalUnit, orgSpec.CA.StreetAddress, orgSpec.CA.PostalCode, "ecdsa", "")
++	//TODO: tls也使用国密证书？？
++	tlsSigAlgo := "ecdsa"
++	if *sigAlgo == "rsa" {
++		tlsSigAlgo = "rsa"
++	}
++	tlsCA, err := ca.NewCA(tlsCADir, orgName, "tls"+orgSpec.CA.CommonName, orgSpec.CA.Country, orgSpec.CA.Province, orgSpec.CA.Locality, orgSpec.CA.OrganizationalUnit, orgSpec.CA.StreetAddress, orgSpec.CA.PostalCode, tlsSigAlgo, "")
+ 	if err != nil {
+ 		fmt.Printf("Error generating tlsCA for org %s:\n%v\n", orgName, err)
+ 		os.Exit(1)
+ 	}
+ 
+-	err = msp.GenerateVerifyingMSP(mspDir, signCA, tlsCA, orgSpec.EnableNodeOUs)
++	err = msp.GenerateVerifyingMSP(mspDir, signCA, tlsCA, orgSpec.EnableNodeOUs, *sigAlgo)
+ 	if err != nil {
+ 		fmt.Printf("Error generating MSP for org %s:\n%v\n", orgName, err)
+ 		os.Exit(1)
+@@ -627,19 +633,23 @@ func generateOrdererOrg(baseDir string, orgSpec OrgSpec) {
+ 	usersDir := filepath.Join(orgDir, "users")
+ 	adminCertsDir := filepath.Join(mspDir, "admincerts")
+ 	// generate signing CA
+-	signCA, err := ca.NewCA(caDir, orgName, orgSpec.CA.CommonName, orgSpec.CA.Country, orgSpec.CA.Province, orgSpec.CA.Locality, orgSpec.CA.OrganizationalUnit, orgSpec.CA.StreetAddress, orgSpec.CA.PostalCode, *sigAlgo, *pluginPath)
++	signCA, err := ca.NewCA(caDir, orgName, orgSpec.CA.CommonName, orgSpec.CA.Country, orgSpec.CA.Province, orgSpec.CA.Locality, orgSpec.CA.OrganizationalUnit, orgSpec.CA.StreetAddress, orgSpec.CA.PostalCode, *sigAlgo, "")
+ 	if err != nil {
+ 		fmt.Printf("Error generating signCA for org %s:\n%v\n", orgName, err)
+ 		os.Exit(1)
+ 	}
++	tlsSigAlgo := "ecdsa"
++	if *sigAlgo == "rsa" {
++		tlsSigAlgo = "rsa"
++	}
+ 	// generate TLS CA
+-	tlsCA, err := ca.NewCA(tlsCADir, orgName, "tls"+orgSpec.CA.CommonName, orgSpec.CA.Country, orgSpec.CA.Province, orgSpec.CA.Locality, orgSpec.CA.OrganizationalUnit, orgSpec.CA.StreetAddress, orgSpec.CA.PostalCode, "ecdsa", "")
++	tlsCA, err := ca.NewCA(tlsCADir, orgName, "tls"+orgSpec.CA.CommonName, orgSpec.CA.Country, orgSpec.CA.Province, orgSpec.CA.Locality, orgSpec.CA.OrganizationalUnit, orgSpec.CA.StreetAddress, orgSpec.CA.PostalCode, tlsSigAlgo, "")
+ 	if err != nil {
+ 		fmt.Printf("Error generating tlsCA for org %s:\n%v\n", orgName, err)
+ 		os.Exit(1)
+ 	}
+ 
+-	err = msp.GenerateVerifyingMSP(mspDir, signCA, tlsCA, false)
++	err = msp.GenerateVerifyingMSP(mspDir, signCA, tlsCA, false, *sigAlgo)
+ 	if err != nil {
+ 		fmt.Printf("Error generating MSP for org %s:\n%v\n", orgName, err)
+ 		os.Exit(1)
+diff --git a/common/tools/cryptogen/msp/generatorsm.go b/common/tools/cryptogen/msp/generatorsm.go
+index e95261383..f6c5bbd43 100644
+--- a/common/tools/cryptogen/msp/generatorsm.go
++++ b/common/tools/cryptogen/msp/generatorsm.go
+@@ -25,7 +25,7 @@ import (
+ )
+ 
+ const (
+-	CLIENT = iota
++	CLIENT  = iota
+ 	ORDERER
+ 	PEER
+ )
+@@ -160,7 +160,7 @@ func GenerateLocalMSP(baseDir, name string, sans []string, signCA *ca.CA,
+ 	return nil
+ }
+ 
+-func GenerateVerifyingMSP(baseDir string, signCA *ca.CA, tlsCA *ca.CA, nodeOUs bool) error {
++func GenerateVerifyingMSP(baseDir string, signCA *ca.CA, tlsCA *ca.CA, nodeOUs bool, sigAlgo string) error {
+ 
+ 	// create folder structure and write artifacts to proper locations
+ 	err := createFolderStructure(baseDir, false)
+@@ -189,7 +189,26 @@ func GenerateVerifyingMSP(baseDir string, signCA *ca.CA, tlsCA *ca.CA, nodeOUs b
+ 	// of unit tests
+ 	factory.InitFactories(nil)
+ 	bcsp := factory.GetDefault()
+-	priv, err := bcsp.KeyGen(&bccsp.ECDSAP256KeyGenOpts{Temporary: true})
++	var opts *factory.FactoryOpts
++	opts = &factory.FactoryOpts{
++		ProviderName: "SW",
++		SwOpts: &factory.SwOpts{
++			HashFamily: "SHA2",
++			SecLevel:   256,
++			Ephemeral:  true,
++		},
++	}
++	bcsp, err = factory.GetBCCSPFromOpts(opts)
++	var keyGenOpts bccsp.KeyGenOpts
++	switch sigAlgo {
++	case "ecdsa":
++		keyGenOpts = &bccsp.ECDSAP256KeyGenOpts{Temporary: true}
++	case "rsa":
++		keyGenOpts = &bccsp.RSA2048KeyGenOpts{Temporary: true}
++	case "sm2":
++		keyGenOpts = &bccsp.SM2KeyGenOpts{Temporary: true}
++	}
++	priv, err := bcsp.KeyGen(keyGenOpts)
+ 	ecPubKey, err := csp.GetECPublicKey(priv)
+ 	if err != nil {
+ 		return err
+diff --git a/common/tools/cryptogen/msp/msp_test.go b/common/tools/cryptogen/msp/msp_test.go
+index ae6da8395..358d99665 100644
+--- a/common/tools/cryptogen/msp/msp_test.go
++++ b/common/tools/cryptogen/msp/msp_test.go
+@@ -36,7 +36,7 @@ func TestGenerateLocalMSP(t *testing.T) {
+ 
+ 	cleanup(testDir)
+ 
+-	err := msp.GenerateLocalMSP(testDir, testName, nil, &ca.CA{}, &ca.CA{}, msp.PEER, true, "")
++	err := msp.GenerateLocalMSP(testDir, testName, nil, &ca.CA{}, &ca.CA{}, msp.PEER, true, "", "")
+ 	assert.Error(t, err, "Empty CA should have failed")
+ 
+ 	caDir := filepath.Join(testDir, "ca")
+@@ -45,10 +45,10 @@ func TestGenerateLocalMSP(t *testing.T) {
+ 	tlsDir := filepath.Join(testDir, "tls")
+ 
+ 	// generate signing CA
+-	signCA, err := ca.NewCA(caDir, testCAOrg, testCAName, testCountry, testProvince, testLocality, testOrganizationalUnit, testStreetAddress, testPostalCode, "")
++	signCA, err := ca.NewCA(caDir, testCAOrg, testCAName, testCountry, testProvince, testLocality, testOrganizationalUnit, testStreetAddress, testPostalCode, "", "")
+ 	assert.NoError(t, err, "Error generating CA")
+ 	// generate TLS CA
+-	tlsCA, err := ca.NewCA(tlsCADir, testCAOrg, testCAName, testCountry, testProvince, testLocality, testOrganizationalUnit, testStreetAddress, testPostalCode, "")
++	tlsCA, err := ca.NewCA(tlsCADir, testCAOrg, testCAName, testCountry, testProvince, testLocality, testOrganizationalUnit, testStreetAddress, testPostalCode, "", "")
+ 	assert.NoError(t, err, "Error generating CA")
+ 
+ 	assert.NotEmpty(t, signCA.SignCert.Subject.Country, "country cannot be empty.")
+@@ -65,7 +65,7 @@ func TestGenerateLocalMSP(t *testing.T) {
+ 	assert.Equal(t, testPostalCode, signCA.SignCert.Subject.PostalCode[0], "Failed to match postalCode")
+ 
+ 	// generate local MSP for nodeType=PEER
+-	err = msp.GenerateLocalMSP(testDir, testName, nil, signCA, tlsCA, msp.PEER, true, "")
++	err = msp.GenerateLocalMSP(testDir, testName, nil, signCA, tlsCA, msp.PEER, true, "", "")
+ 	assert.NoError(t, err, "Failed to generate local MSP")
+ 
+ 	// check to see that the right files were generated/saved
+@@ -93,7 +93,7 @@ func TestGenerateLocalMSP(t *testing.T) {
+ 	}
+ 
+ 	// generate local MSP for nodeType=CLIENT
+-	err = msp.GenerateLocalMSP(testDir, testName, nil, signCA, tlsCA, msp.CLIENT, true, "")
++	err = msp.GenerateLocalMSP(testDir, testName, nil, signCA, tlsCA, msp.CLIENT, true, "", "")
+ 	assert.NoError(t, err, "Failed to generate local MSP")
+ 	//only need to check for the TLS certs
+ 	tlsFiles = []string{
+@@ -116,10 +116,10 @@ func TestGenerateLocalMSP(t *testing.T) {
+ 	assert.NoError(t, err, "Error setting up local MSP")
+ 
+ 	tlsCA.Name = "test/fail"
+-	err = msp.GenerateLocalMSP(testDir, testName, nil, signCA, tlsCA, msp.CLIENT, true, "")
++	err = msp.GenerateLocalMSP(testDir, testName, nil, signCA, tlsCA, msp.CLIENT, true, "", "")
+ 	assert.Error(t, err, "Should have failed with CA name 'test/fail'")
+ 	signCA.Name = "test/fail"
+-	err = msp.GenerateLocalMSP(testDir, testName, nil, signCA, tlsCA, msp.ORDERER, true, "")
++	err = msp.GenerateLocalMSP(testDir, testName, nil, signCA, tlsCA, msp.ORDERER, true, "", "")
+ 	assert.Error(t, err, "Should have failed with CA name 'test/fail'")
+ 	t.Log(err)
+ 	cleanup(testDir)
+@@ -132,10 +132,10 @@ func TestGenerateVerifyingMSP(t *testing.T) {
+ 	tlsCADir := filepath.Join(testDir, "tlsca")
+ 	mspDir := filepath.Join(testDir, "msp")
+ 	// generate signing CA
+-	signCA, err := ca.NewCA(caDir, testCAOrg, testCAName, testCountry, testProvince, testLocality, testOrganizationalUnit, testStreetAddress, testPostalCode, "")
++	signCA, err := ca.NewCA(caDir, testCAOrg, testCAName, testCountry, testProvince, testLocality, testOrganizationalUnit, testStreetAddress, testPostalCode, "", "")
+ 	assert.NoError(t, err, "Error generating CA")
+ 	// generate TLS CA
+-	tlsCA, err := ca.NewCA(tlsCADir, testCAOrg, testCAName, testCountry, testProvince, testLocality, testOrganizationalUnit, testStreetAddress, testPostalCode, "")
++	tlsCA, err := ca.NewCA(tlsCADir, testCAOrg, testCAName, testCountry, testProvince, testLocality, testOrganizationalUnit, testStreetAddress, testPostalCode, "", "")
+ 	assert.NoError(t, err, "Error generating CA")
+ 
+ 	err = msp.GenerateVerifyingMSP(mspDir, signCA, tlsCA, true, "")
+-- 
+2.20.1.windows.1
+

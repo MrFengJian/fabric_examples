@@ -1,0 +1,4026 @@
+From 5145f21c2ce86e6c7068e63b133ce5952c48721e Mon Sep 17 00:00:00 2001
+From: fengjianjian <fengjianjian007@gmail.com>
+Date: Mon, 4 Mar 2019 12:09:04 +0800
+Subject: [PATCH 3/3] =?UTF-8?q?=E5=9B=BD=E5=AF=86=E6=94=AF=E6=8C=81?=
+ =?UTF-8?q?=E5=A2=9E=E5=8A=A0=E6=B5=8B=E8=AF=95?=
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+---
+ doc.go                                        |   2 +-
+ .../hyperledger/fabric-ca/lib/client.go       |   1 +
+ .../lib/client/credential/x509/signer.go      |   2 +-
+ .../fabric-ca/lib/spi/affiliation.go          |  55 +++
+ .../fabric-ca/lib/spi/affiliation_test.go     |  46 ++
+ .../fabric-ca/lib/spi/userregistry.go         |  86 ++++
+ .../hyperledger/fabric-ca/lib/util.go         | 220 ++++++++-
+ .../cryptosuitebridge/cryptosuitebridge.go    |  13 +
+ .../hyperledger/fabric-ca/util/csp.go         |  18 +-
+ .../hyperledger/fabric-ca/util/util.go        |   2 +-
+ .../fabric/bccsp/factory/factory.go           |  93 ++++
+ .../fabric/bccsp/factory/gmfactory.go         |  53 +++
+ .../fabric/bccsp/factory/nopkcs11.go          |  99 ++++
+ .../hyperledger/fabric/bccsp/factory/opts.go  |  35 ++
+ .../fabric/bccsp/factory/pkcs11.go            | 118 +++++
+ .../factory/{pkcs11 => }/pkcs11factory.go     |  14 +-
+ .../factory/{plugin => }/pluginfactory.go     |  24 +-
+ .../bccsp/factory/{sw => }/swfactory.go       |  12 +-
+ .../hyperledger/fabric/bccsp/gm/fileks.go     | 407 +++++++++++++++++
+ .../hyperledger/fabric/bccsp/gm/impl.go       | 362 +++++++++++++++
+ .../hyperledger/fabric/bccsp/gm/keys.go       | 421 ++++++++++++++++++
+ .../hyperledger/fabric/bccsp/gm/sm2.go        |  78 ++++
+ .../hyperledger/fabric/bccsp/gm/sm2key.go     | 119 +++++
+ .../hyperledger/fabric/bccsp/gm/sm3sig.go     |  51 +++
+ .../hyperledger/fabric/bccsp/hashopts.go      |   5 +
+ .../hyperledger/fabric/bccsp/sm2opts.go       | 131 ++++++
+ .../hyperledger/fabric/bccsp/utils/keys.go    |  14 +-
+ .../hyperledger/fabric/bccsp/utils/x509.go    |   8 +-
+ .../fabric/common/attrmgr/attrmgr.go          |   2 +-
+ .../github.com/hyperledger/fabric/msp/cert.go |   2 +-
+ .../hyperledger/fabric/msp/identities.go      |  29 +-
+ .../hyperledger/fabric/msp/mspimpl.go         |   2 +-
+ .../hyperledger/fabric/msp/mspimplsetup.go    |   2 +-
+ .../hyperledger/fabric/msp/mspimplvalidate.go |   2 +-
+ .../cryptosuitebridge/cryptosuitebridge.go    |   3 +
+ network_config.yaml                           | 156 +++++++
+ pkg/client/common/verifier/signature.go       |  47 +-
+ pkg/client/msp/client.go                      |  36 +-
+ pkg/core/config/cryptoutil/cryptoutils.go     |   5 +-
+ .../cryptosuite/bccsp/sw/cryptosuiteimpl.go   |  18 +-
+ pkg/core/cryptosuite/cryptosuite.go           |   4 +
+ pkg/fab/channel/membership/membership.go      |   9 +-
+ pkg/fab/comm/connection.go                    |   2 +-
+ pkg/fab/comm/streamconnection.go              |   2 +-
+ pkg/fab/orderer/orderer.go                    |  12 +-
+ pkg/fab/peer/peer.go                          |   2 +-
+ pkg/fab/peer/peerendorser.go                  |   2 +-
+ pkg/fab/signingmgr/signingmgr.go              |   1 -
+ sdk_usage.go                                  | 308 +++++++++++++
+ 49 files changed, 3060 insertions(+), 75 deletions(-)
+ create mode 100644 internal/github.com/hyperledger/fabric-ca/lib/spi/affiliation.go
+ create mode 100644 internal/github.com/hyperledger/fabric-ca/lib/spi/affiliation_test.go
+ create mode 100644 internal/github.com/hyperledger/fabric-ca/lib/spi/userregistry.go
+ create mode 100644 internal/github.com/hyperledger/fabric/bccsp/factory/factory.go
+ create mode 100644 internal/github.com/hyperledger/fabric/bccsp/factory/gmfactory.go
+ create mode 100644 internal/github.com/hyperledger/fabric/bccsp/factory/nopkcs11.go
+ create mode 100644 internal/github.com/hyperledger/fabric/bccsp/factory/opts.go
+ create mode 100644 internal/github.com/hyperledger/fabric/bccsp/factory/pkcs11.go
+ rename internal/github.com/hyperledger/fabric/bccsp/factory/{pkcs11 => }/pkcs11factory.go (87%)
+ rename internal/github.com/hyperledger/fabric/bccsp/factory/{plugin => }/pluginfactory.go (67%)
+ rename internal/github.com/hyperledger/fabric/bccsp/factory/{sw => }/swfactory.go (91%)
+ create mode 100644 internal/github.com/hyperledger/fabric/bccsp/gm/fileks.go
+ create mode 100644 internal/github.com/hyperledger/fabric/bccsp/gm/impl.go
+ create mode 100644 internal/github.com/hyperledger/fabric/bccsp/gm/keys.go
+ create mode 100644 internal/github.com/hyperledger/fabric/bccsp/gm/sm2.go
+ create mode 100644 internal/github.com/hyperledger/fabric/bccsp/gm/sm2key.go
+ create mode 100644 internal/github.com/hyperledger/fabric/bccsp/gm/sm3sig.go
+ create mode 100644 internal/github.com/hyperledger/fabric/bccsp/sm2opts.go
+ create mode 100644 network_config.yaml
+ create mode 100644 sdk_usage.go
+
+diff --git a/doc.go b/doc.go
+index b6f7a262..338af9d7 100644
+--- a/doc.go
++++ b/doc.go
+@@ -37,4 +37,4 @@ SPDX-License-Identifier: Apache-2.0
+ //         Note: you create a new client instance for each context you need.
+ //      4) Use the funcs provided by each client to create your solution!
+ //      5) Call fabsdk.Close() to release resources and caches.
+-package fabricsdk
++package main
+diff --git a/internal/github.com/hyperledger/fabric-ca/lib/client.go b/internal/github.com/hyperledger/fabric-ca/lib/client.go
+index a3493737..4c39ae6d 100644
+--- a/internal/github.com/hyperledger/fabric-ca/lib/client.go
++++ b/internal/github.com/hyperledger/fabric-ca/lib/client.go
+@@ -3,6 +3,7 @@ Copyright IBM Corp. All Rights Reserved.
+ 
+ SPDX-License-Identifier: Apache-2.0
+ */
++
+ /*
+ Notice: This file has been modified for Hyperledger Fabric SDK Go usage.
+ Please review third_party pinning scripts and patches for more details.
+diff --git a/internal/github.com/hyperledger/fabric-ca/lib/client/credential/x509/signer.go b/internal/github.com/hyperledger/fabric-ca/lib/client/credential/x509/signer.go
+index 0f53c957..dd65618a 100644
+--- a/internal/github.com/hyperledger/fabric-ca/lib/client/credential/x509/signer.go
++++ b/internal/github.com/hyperledger/fabric-ca/lib/client/credential/x509/signer.go
+@@ -11,7 +11,7 @@ Please review third_party pinning scripts and patches for more details.
+ package x509
+ 
+ import (
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"fmt"
+ 
+ 	"github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric-ca/util"
+diff --git a/internal/github.com/hyperledger/fabric-ca/lib/spi/affiliation.go b/internal/github.com/hyperledger/fabric-ca/lib/spi/affiliation.go
+new file mode 100644
+index 00000000..e7bc99b2
+--- /dev/null
++++ b/internal/github.com/hyperledger/fabric-ca/lib/spi/affiliation.go
+@@ -0,0 +1,55 @@
++/*
++Copyright IBM Corp. 2016 All Rights Reserved.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++                 http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package spi
++
++// affiliationImpl defines a group name and its parent
++type affiliationImpl struct {
++	Name   string `db:"name"`
++	Prekey string `db:"prekey"`
++	Level  int    `db:"level"`
++}
++
++// Affiliation is the API for a user's affiliation
++type Affiliation interface {
++	GetName() string
++	GetPrekey() string
++	GetLevel() int
++}
++
++// NewAffiliation returns an affiliationImpl object
++func NewAffiliation(name, prekey string, level int) Affiliation {
++	return &affiliationImpl{
++		Name:   name,
++		Prekey: prekey,
++		Level:  level,
++	}
++}
++
++// GetName returns the name of the affiliation
++func (g *affiliationImpl) GetName() string {
++	return g.Name
++}
++
++// GetPrekey returns the prekey of the affiliation
++func (g *affiliationImpl) GetPrekey() string {
++	return g.Prekey
++}
++
++// GetLevel returns the level of the affiliation
++func (g *affiliationImpl) GetLevel() int {
++	return g.Level
++}
+diff --git a/internal/github.com/hyperledger/fabric-ca/lib/spi/affiliation_test.go b/internal/github.com/hyperledger/fabric-ca/lib/spi/affiliation_test.go
+new file mode 100644
+index 00000000..c4880c9d
+--- /dev/null
++++ b/internal/github.com/hyperledger/fabric-ca/lib/spi/affiliation_test.go
+@@ -0,0 +1,46 @@
++/*
++Copyright IBM Corp. 2016 All Rights Reserved.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++                 http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package spi
++
++import "testing"
++
++func TestGetName(t *testing.T) {
++	aff := NewAffiliation("Bank_a", "1234", 0)
++	name := aff.GetName()
++
++	if name != "Bank_a" {
++		t.Error("Name does not match, expected 'Bank_a'")
++	}
++}
++
++func TestGetPrekey(t *testing.T) {
++	aff := NewAffiliation("Bank_a", "1234", 0)
++	name := aff.GetPrekey()
++
++	if name != "1234" {
++		t.Error("Prekey does not match, expected '1234'")
++	}
++}
++
++func TestGetLevel(t *testing.T) {
++	aff := NewAffiliation("Bank_a", "1234", 2)
++	level := aff.GetLevel()
++
++	if level != 2 {
++		t.Error("Level does not match, expected '2'")
++	}
++}
+diff --git a/internal/github.com/hyperledger/fabric-ca/lib/spi/userregistry.go b/internal/github.com/hyperledger/fabric-ca/lib/spi/userregistry.go
+new file mode 100644
+index 00000000..9b583c4b
+--- /dev/null
++++ b/internal/github.com/hyperledger/fabric-ca/lib/spi/userregistry.go
+@@ -0,0 +1,86 @@
++/*
++Copyright IBM Corp. All Rights Reserved.
++
++SPDX-License-Identifier: Apache-2.0
++*/
++
++/*
++ * This file defines the user registry interface used by the fabric-ca server.
++ */
++
++package spi
++
++import (
++	"github.com/hyperledger/fabric-ca/api"
++	"github.com/jmoiron/sqlx"
++)
++
++// UserInfo contains information about a user
++type UserInfo struct {
++	Name                      string
++	Pass                      string `mask:"password"`
++	Type                      string
++	Affiliation               string
++	Attributes                []api.Attribute
++	State                     int
++	MaxEnrollments            int
++	Level                     int
++	IncorrectPasswordAttempts int
++}
++
++// DbTxResult returns information on any affiliations and/or identities affected
++// during a database transaction
++type DbTxResult struct {
++	Affiliations []Affiliation
++	Identities   []User
++}
++
++// User is the SPI for a user
++type User interface {
++	// Returns the enrollment ID of the user
++	GetName() string
++	// Return the type of the user
++	GetType() string
++	// Return the max enrollments of the user
++	GetMaxEnrollments() int
++	// Login the user with a password
++	Login(password string, caMaxEnrollment int) error
++	// Get the complete path for the user's affiliation.
++	GetAffiliationPath() []string
++	// GetAttribute returns the value for an attribute name
++	GetAttribute(name string) (*api.Attribute, error)
++	// GetAttributes returns the requested attributes
++	GetAttributes(attrNames []string) ([]api.Attribute, error)
++	// ModifyAttributes adds, removes, or deletes attribute
++	ModifyAttributes(attrs []api.Attribute) error
++	// LoginComplete completes the login process by incrementing the state of the user
++	LoginComplete() error
++	// Revoke will revoke the user, setting the state of the user to be -1
++	Revoke() error
++	// IsRevoked returns back true if user is revoked
++	IsRevoked() bool
++	// GetLevel returns the level of the user, level is used to verify if the user needs migration
++	GetLevel() int
++	// SetLevel sets the level of the user
++	SetLevel(level int) error
++	// IncrementIncorrectPasswordAttempts updates the incorrect password count of user
++	IncrementIncorrectPasswordAttempts() error
++	// GetFailedLoginAttempts returns the number of times the user has entered an incorrect password
++	GetFailedLoginAttempts() int
++}
++
++// UserRegistry is the API for retreiving users and groups
++type UserRegistry interface {
++	GetUser(id string, attrs []string) (User, error)
++	InsertUser(user *UserInfo) error
++	UpdateUser(user *UserInfo, updatePass bool) error
++	DeleteUser(id string) (User, error)
++	GetAffiliation(name string) (Affiliation, error)
++	GetAllAffiliations(name string) (*sqlx.Rows, error)
++	InsertAffiliation(name string, prekey string, level int) error
++	GetUserLessThanLevel(version int) ([]User, error)
++	GetFilteredUsers(affiliation, types string) (*sqlx.Rows, error)
++	DeleteAffiliation(name string, force, identityRemoval, isRegistrar bool) (*DbTxResult, error)
++	ModifyAffiliation(oldAffiliation, newAffiliation string, force, isRegistrar bool) (*DbTxResult, error)
++	GetAffiliationTree(name string) (*DbTxResult, error)
++}
+diff --git a/internal/github.com/hyperledger/fabric-ca/lib/util.go b/internal/github.com/hyperledger/fabric-ca/lib/util.go
+index fb6ae2c4..79bc116a 100644
+--- a/internal/github.com/hyperledger/fabric-ca/lib/util.go
++++ b/internal/github.com/hyperledger/fabric-ca/lib/util.go
+@@ -3,6 +3,7 @@ Copyright IBM Corp. All Rights Reserved.
+ 
+ SPDX-License-Identifier: Apache-2.0
+ */
++
+ /*
+ Notice: This file has been modified for Hyperledger Fabric SDK Go usage.
+ Please review third_party pinning scripts and patches for more details.
+@@ -12,13 +13,25 @@ package lib
+ 
+ import (
+ 	"crypto/tls"
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"encoding/hex"
+ 	"encoding/pem"
+ 	"net/http"
+ 
+ 	"github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric-ca/util"
+ 	"github.com/pkg/errors"
++	"io/ioutil"
++	"github.com/spf13/viper"
++	"github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric-ca/lib/spi"
++	"strings"
++	"encoding/json"
++	"fmt"
++	"github.com/swordboy/crypto/adapter/certinfo"
++	"os"
++	"path/filepath"
++	"github.com/cloudflare/cfssl/log"
++	originalX509 "crypto/x509"
++	"github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric-ca/api"
+ )
+ 
+ var clientAuthTypes = map[string]tls.ClientAuthType{
+@@ -53,15 +66,220 @@ func BytesToX509Cert(bytes []byte) (*x509.Certificate, error) {
+ 	return cert, err
+ }
+ 
++// LoadPEMCertPool loads a pool of PEM certificates from list of files
++func LoadPEMCertPool(certFiles []string) (*x509.CertPool, error) {
++	certPool := x509.NewCertPool()
++
++	if len(certFiles) > 0 {
++		for _, cert := range certFiles {
++			log.Debugf("Reading cert file: %s", cert)
++			pemCerts, err := ioutil.ReadFile(cert)
++			if err != nil {
++				return nil, err
++			}
++
++			log.Debugf("Appending cert %s to pool", cert)
++			if !certPool.AppendCertsFromPEM(pemCerts) {
++				return nil, errors.New("Failed to load cert pool")
++			}
++		}
++	}
++
++	return certPool, nil
++}
++
++func LoadOriginalPEMCertPool(certFiles []string) (*originalX509.CertPool, error) {
++	certPool := originalX509.NewCertPool()
++
++	if len(certFiles) > 0 {
++		for _, cert := range certFiles {
++			log.Debugf("Reading cert file: %s", cert)
++			pemCerts, err := ioutil.ReadFile(cert)
++			if err != nil {
++				return nil, err
++			}
++
++			log.Debugf("Appending cert %s to pool", cert)
++			if !certPool.AppendCertsFromPEM(pemCerts) {
++				return nil, errors.New("Failed to load cert pool")
++			}
++		}
++	}
++
++	return certPool, nil
++}
++
++// UnmarshalConfig unmarshals a configuration file
++func UnmarshalConfig(config interface{}, vp *viper.Viper, configFile string,
++	server bool) error {
++
++	vp.SetConfigFile(configFile)
++	err := vp.ReadInConfig()
++	if err != nil {
++		return errors.Wrapf(err, "Failed to read config file '%s'", configFile)
++	}
++
++	err = vp.Unmarshal(config)
++	if err != nil {
++		return errors.Wrapf(err, "Incorrect format in file '%s'", configFile)
++	}
++	if server {
++		serverCfg := config.(*ServerConfig)
++		err = vp.Unmarshal(&serverCfg.CAcfg)
++		if err != nil {
++			return errors.Wrapf(err, "Incorrect format in file '%s'", configFile)
++		}
++	}
++	return nil
++}
++
++func getMaxEnrollments(userMaxEnrollments int, caMaxEnrollments int) (int, error) {
++	log.Debugf("Max enrollment value verification - User specified max enrollment: %d, CA max enrollment: %d", userMaxEnrollments, caMaxEnrollments)
++	if userMaxEnrollments < -1 {
++		return 0, errors.Errorf("Max enrollment in registration request may not be less than -1, but was %d", userMaxEnrollments)
++	}
++	switch caMaxEnrollments {
++	case -1:
++		if userMaxEnrollments == 0 {
++			// The user is requesting the matching limit of the CA, so gets infinite
++			return caMaxEnrollments, nil
++		}
++		// There is no CA max enrollment limit, so simply use the user requested value
++		return userMaxEnrollments, nil
++	case 0:
++		// The CA max enrollment is 0, so registration is disabled.
++		return 0, errors.New("Registration is disabled")
++	default:
++		switch userMaxEnrollments {
++		case -1:
++			// User requested infinite enrollments is not allowed
++			return 0, errors.New("Registration for infinite enrollments is not allowed")
++		case 0:
++			// User is requesting the current CA maximum
++			return caMaxEnrollments, nil
++		default:
++			// User is requesting a specific positive value; make sure it doesn't exceed the CA maximum.
++			if userMaxEnrollments > caMaxEnrollments {
++				return 0, errors.Errorf("Requested enrollments (%d) exceeds maximum allowable enrollments (%d)",
++					userMaxEnrollments, caMaxEnrollments)
++			}
++			// otherwise, use the requested maximum
++			return userMaxEnrollments, nil
++		}
++	}
++}
++
++// GetUserAffiliation return a joined version version of the affiliation path with '.' as the seperator
++func GetUserAffiliation(user spi.User) string {
++	return strings.Join(user.GetAffiliationPath(), ".")
++}
++
+ func addQueryParm(req *http.Request, name, value string) {
+ 	url := req.URL.Query()
+ 	url.Add(name, value)
+ 	req.URL.RawQuery = url.Encode()
+ }
+ 
++// IdentityDecoder decodes streams of data coming from the server into an Identity object
++func IdentityDecoder(decoder *json.Decoder) error {
++	var id api.IdentityInfo
++	err := decoder.Decode(&id)
++	if err != nil {
++		return err
++	}
++	fmt.Printf("Name: %s, Type: %s, Affiliation: %s, Max Enrollments: %d, Attributes: %+v\n", id.ID, id.Type, id.Affiliation, id.MaxEnrollments, id.Attributes)
++	return nil
++}
++
++// AffiliationDecoder decodes streams of data coming from the server into an Affiliation object
++func AffiliationDecoder(decoder *json.Decoder) error {
++	var aff api.AffiliationInfo
++	err := decoder.Decode(&aff)
++	if err != nil {
++		return err
++	}
++	fmt.Printf("%s\n", aff.Name)
++	return nil
++}
++
+ // CertificateDecoder is needed to keep track of state, to see how many certificates
+ // have been returned for each enrollment ID.
+ type CertificateDecoder struct {
+ 	certIDCount map[string]int
+ 	storePath   string
+ }
++
++// NewCertificateDecoder returns decoder for certificates
++func NewCertificateDecoder(storePath string) *CertificateDecoder {
++	cd := &CertificateDecoder{}
++	cd.certIDCount = make(map[string]int)
++	cd.storePath = storePath
++	return cd
++}
++
++type certPEM struct {
++	PEM string `db:"pem"`
++}
++
++// CertificateDecoder decodes streams of data coming from the server
++func (cd *CertificateDecoder) CertificateDecoder(decoder *json.Decoder) error {
++	var cert certPEM
++	err := decoder.Decode(&cert)
++	if err != nil {
++		return err
++	}
++	block, rest := pem.Decode([]byte(cert.PEM))
++	if block == nil || len(rest) > 0 {
++		return errors.New("Certificate decoding error")
++	}
++	certificate, err := x509.ParseCertificate(block.Bytes)
++	if err != nil {
++		return err
++	}
++	enrollmentID := certificate.Subject.CommonName
++	if cd.storePath != "" {
++		err = cd.StoreCert(enrollmentID, cd.storePath, []byte(cert.PEM))
++		if err != nil {
++			return err
++		}
++	}
++
++	result, err := certinfo.CertificateText(certificate)
++	if err != nil {
++		return err
++	}
++	fmt.Printf(result)
++	return nil
++}
++
++// StoreCert stores the certificate on the file system
++func (cd *CertificateDecoder) StoreCert(enrollmentID, storePath string, cert []byte) error {
++	cd.certIDCount[enrollmentID] = cd.certIDCount[enrollmentID] + 1
++
++	err := os.MkdirAll(storePath, os.ModePerm)
++	if err != nil {
++		return err
++	}
++
++	var filePath string
++	singleCertName := fmt.Sprintf("%s.pem", enrollmentID)
++	switch cd.certIDCount[enrollmentID] {
++	case 1: // Only one certificate returned, don't need to append number to certificate file name
++		filePath = filepath.Join(storePath, singleCertName)
++	case 2: // Two certificates returned, rename the old certificate to have number at the end
++		err := os.Rename(filepath.Join(storePath, singleCertName), filepath.Join(storePath, fmt.Sprintf("%s-1.pem", enrollmentID)))
++		if err != nil {
++			return errors.WithMessage(err, fmt.Sprintf("Failed to rename certificate: %s", singleCertName))
++		}
++		filePath = filepath.Join(storePath, fmt.Sprintf("%s-%d.pem", enrollmentID, cd.certIDCount[enrollmentID]))
++	default:
++		filePath = filepath.Join(storePath, fmt.Sprintf("%s-%d.pem", enrollmentID, cd.certIDCount[enrollmentID]))
++	}
++
++	err = ioutil.WriteFile(filePath, cert, 0644)
++	if err != nil {
++		return errors.WithMessage(err, fmt.Sprintf("Failed to store certificate at: %s", storePath))
++	}
++
++	return nil
++}
+diff --git a/internal/github.com/hyperledger/fabric-ca/sdkpatch/cryptosuitebridge/cryptosuitebridge.go b/internal/github.com/hyperledger/fabric-ca/sdkpatch/cryptosuitebridge/cryptosuitebridge.go
+index 086a790a..dee2ee62 100644
+--- a/internal/github.com/hyperledger/fabric-ca/sdkpatch/cryptosuitebridge/cryptosuitebridge.go
++++ b/internal/github.com/hyperledger/fabric-ca/sdkpatch/cryptosuitebridge/cryptosuitebridge.go
+@@ -21,6 +21,7 @@ import (
+ 	"github.com/hyperledger/fabric-sdk-go/pkg/common/providers/core"
+ 	"github.com/hyperledger/fabric-sdk-go/pkg/core/cryptosuite"
+ 	"crypto/rsa"
++	"github.com/swordboy/crypto/sm/sm2"
+ )
+ 
+ const (
+@@ -68,6 +69,10 @@ func RsaPrivateKeyToDer(privatekey *rsa.PrivateKey) ([]byte, error) {
+ 	return utils.RsaPrivateKeyToDER(privatekey)
+ }
+ 
++func SM2PrivateKeyToDER(priv *sm2.PrivateKey) ([]byte, error) {
++	return utils.SM2PrivateKeyToDER(priv)
++}
++
+ //GetDefault returns default cryptosuite from bccsp factory default
+ func GetDefault() core.CryptoSuite {
+ 	return cryptosuite.GetDefault()
+@@ -108,6 +113,10 @@ func GetECDSAP256KeyGenOpts(ephemeral bool) core.KeyGenOpts {
+ 	return &bccsp.ECDSAP256KeyGenOpts{Temporary: ephemeral}
+ }
+ 
++func GetSM2KeyGenOpts(ephemeral bool) core.KeyGenOpts {
++	return &bccsp.SM2KeyGenOpts{Temporary: ephemeral}
++}
++
+ //GetECDSAP384KeyGenOpts options for ECDSA key generation with curve P-384.
+ func GetECDSAP384KeyGenOpts(ephemeral bool) core.KeyGenOpts {
+ 	return &bccsp.ECDSAP384KeyGenOpts{Temporary: ephemeral}
+@@ -128,3 +137,7 @@ func GetECDSAPrivateKeyImportOpts(ephemeral bool) core.KeyImportOpts {
+ func GetRSAPrivateKeyImportOpts(ephemeral bool) core.KeyImportOpts {
+ 	return &bccsp.RSA2048PrivateKeyImportOpts{Temporary: ephemeral}
+ }
++
++func GetSM2PrivateKeyImportOpts(ephemeral bool) core.KeyImportOpts {
++	return &bccsp.SM2PrivateKeyImportOpts{Temporary: ephemeral}
++}
+diff --git a/internal/github.com/hyperledger/fabric-ca/util/csp.go b/internal/github.com/hyperledger/fabric-ca/util/csp.go
+index 7aff9e69..7df6f2bf 100644
+--- a/internal/github.com/hyperledger/fabric-ca/util/csp.go
++++ b/internal/github.com/hyperledger/fabric-ca/util/csp.go
+@@ -26,7 +26,7 @@ import (
+ 	"crypto/ecdsa"
+ 	"crypto/rsa"
+ 	"crypto/tls"
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"encoding/hex"
+ 	"encoding/pem"
+ 	"fmt"
+@@ -39,6 +39,7 @@ import (
+ 	log "github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric-ca/sdkpatch/logbridge"
+ 	"github.com/hyperledger/fabric-sdk-go/pkg/common/providers/core"
+ 	"github.com/pkg/errors"
++	"github.com/swordboy/crypto/sm/sm2"
+ )
+ 
+ // getBCCSPKeyOpts generates a key as specified in the request.
+@@ -74,6 +75,11 @@ func getBCCSPKeyOpts(kr csr.KeyRequest, ephemeral bool) (opts core.KeyGenOpts, e
+ 		default:
+ 			return nil, errors.Errorf("Invalid ECDSA key size: %d", kr.Size())
+ 		}
++	case "sm2":
++		if kr.Size() != 256 {
++			return nil, errors.New("SM2 only support key size: 256")
++		}
++		return factory.GetSM2KeyGenOpts(ephemeral), nil
+ 	default:
+ 		return nil, errors.Errorf("Invalid algorithm: %s", kr.Algo())
+ 	}
+@@ -166,6 +172,16 @@ func ImportBCCSPKeyFromPEMBytes(keyBuff []byte, myCSP core.CryptoSuite, temporar
+ 		return nil, errors.WithMessage(err, fmt.Sprintf("Failed parsing private key from %s", keyFile))
+ 	}
+ 	switch key.(type) {
++	case *sm2.PrivateKey:
++		priv, err := factory.SM2PrivateKeyToDER(key.(*sm2.PrivateKey))
++		if err != nil {
++			return nil, errors.WithMessage(err, fmt.Sprintf("Failed to convert SM2 private key for '%s'", keyFile))
++		}
++		sk, err := myCSP.KeyImport(priv, factory.GetSM2PrivateKeyImportOpts(temporary))
++		if err != nil {
++			return nil, errors.WithMessage(err, fmt.Sprintf("Failed to import SM2 private key for '%s'", keyFile))
++		}
++		return sk, nil
+ 	case *ecdsa.PrivateKey:
+ 		priv, err := factory.PrivateKeyToDER(key.(*ecdsa.PrivateKey))
+ 		if err != nil {
+diff --git a/internal/github.com/hyperledger/fabric-ca/util/util.go b/internal/github.com/hyperledger/fabric-ca/util/util.go
+index d489817b..6f21c3f2 100644
+--- a/internal/github.com/hyperledger/fabric-ca/util/util.go
++++ b/internal/github.com/hyperledger/fabric-ca/util/util.go
+@@ -23,7 +23,7 @@ package util
+ import (
+ 	"bytes"
+ 	"crypto/ecdsa"
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"encoding/base64"
+ 	"encoding/json"
+ 	"encoding/pem"
+diff --git a/internal/github.com/hyperledger/fabric/bccsp/factory/factory.go b/internal/github.com/hyperledger/fabric/bccsp/factory/factory.go
+new file mode 100644
+index 00000000..6e245a3f
+--- /dev/null
++++ b/internal/github.com/hyperledger/fabric/bccsp/factory/factory.go
+@@ -0,0 +1,93 @@
++/*
++Copyright IBM Corp. 2016 All Rights Reserved.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++		 http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++package factory
++
++import (
++	"sync"
++
++	"github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric/bccsp"
++	flogging "github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric/sdkpatch/logbridge"
++	"github.com/pkg/errors"
++)
++
++var (
++	// Default BCCSP
++	defaultBCCSP bccsp.BCCSP
++
++	// when InitFactories has not been called yet (should only happen
++	// in test cases), use this BCCSP temporarily
++	bootBCCSP bccsp.BCCSP
++
++	// BCCSP Factories
++	bccspMap map[string]bccsp.BCCSP
++
++	// factories' Sync on Initialization
++	factoriesInitOnce sync.Once
++	bootBCCSPInitOnce sync.Once
++
++	// Factories' Initialization Error
++	factoriesInitError error
++
++	logger = flogging.MustGetLogger("bccsp")
++)
++
++// BCCSPFactory is used to get instances of the BCCSP interface.
++// A Factory has name used to address it.
++type BCCSPFactory interface {
++
++	// Name returns the name of this factory
++	Name() string
++
++	// Get returns an instance of BCCSP using opts.
++	Get(opts *FactoryOpts) (bccsp.BCCSP, error)
++}
++
++// GetDefault returns a non-ephemeral (long-term) BCCSP
++func GetDefault() bccsp.BCCSP {
++	if defaultBCCSP == nil {
++		logger.Warning("Before using BCCSP, please call InitFactories(). Falling back to bootBCCSP.")
++		bootBCCSPInitOnce.Do(func() {
++			var err error
++			f := &SWFactory{}
++			bootBCCSP, err = f.Get(GetDefaultOpts())
++			if err != nil {
++				panic("BCCSP Internal error, failed initialization with GetDefaultOpts!")
++			}
++		})
++		return bootBCCSP
++	}
++	return defaultBCCSP
++}
++
++// GetBCCSP returns a BCCSP created according to the options passed in input.
++func GetBCCSP(name string) (bccsp.BCCSP, error) {
++	csp, ok := bccspMap[name]
++	if !ok {
++		return nil, errors.Errorf("Could not find BCCSP, no '%s' provider", name)
++	}
++	return csp, nil
++}
++
++func initBCCSP(f BCCSPFactory, config *FactoryOpts) error {
++	csp, err := f.Get(config)
++	if err != nil {
++		return errors.Errorf("Could not initialize BCCSP %s [%s]", f.Name(), err)
++	}
++
++	logger.Debugf("Initialize BCCSP [%s]", f.Name())
++	bccspMap[f.Name()] = csp
++	return nil
++}
+diff --git a/internal/github.com/hyperledger/fabric/bccsp/factory/gmfactory.go b/internal/github.com/hyperledger/fabric/bccsp/factory/gmfactory.go
+new file mode 100644
+index 00000000..67a21b4f
+--- /dev/null
++++ b/internal/github.com/hyperledger/fabric/bccsp/factory/gmfactory.go
+@@ -0,0 +1,53 @@
++/*
++Copyright IBM Corp. All Rights Reserved.
++
++SPDX-License-Identifier: Apache-2.0
++*/
++package factory
++
++import (
++	"errors"
++	"github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric/bccsp"
++	"github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric/bccsp/gm"
++)
++
++const (
++	// PluginFactoryName is the factory name for BCCSP plugins
++	GMFactoryName = "SW"
++)
++
++// PluginFactory is the factory for BCCSP plugins
++type GMFactory struct{}
++
++// Name returns the name of this factory
++func (f *GMFactory) Name() string {
++	return GMFactoryName
++}
++
++// Get returns an instance of BCCSP using Opts.
++func (f *GMFactory) Get(config *FactoryOpts) (bccsp.BCCSP, error) {
++	// Validate arguments
++	if config == nil || config.SwOpts == nil {
++		return nil, errors.New("Invalid config. It must not be nil.")
++	}
++
++	swOpts := config.SwOpts
++
++	var keystore string
++	if swOpts.FileKeystore != nil && swOpts.Ephemeral != true {
++		keystore = swOpts.FileKeystore.KeyStorePath
++	}
++
++	return gm.New(keystore)
++}
++
++func (f *GMFactory) GetBySwOpts(opt *SwOpts)(bccsp.BCCSP,error){
++	if opt ==nil{
++		return nil,errors.New("invalid opt for gm factory")
++	}
++	var keystore string
++	if opt.FileKeystore != nil && opt.Ephemeral != true {
++		keystore = opt.FileKeystore.KeyStorePath
++	}
++	return gm.New(keystore)
++}
+\ No newline at end of file
+diff --git a/internal/github.com/hyperledger/fabric/bccsp/factory/nopkcs11.go b/internal/github.com/hyperledger/fabric/bccsp/factory/nopkcs11.go
+new file mode 100644
+index 00000000..05bdbae0
+--- /dev/null
++++ b/internal/github.com/hyperledger/fabric/bccsp/factory/nopkcs11.go
+@@ -0,0 +1,99 @@
++// +build !pkcs11
++
++/*
++Copyright IBM Corp. 2017 All Rights Reserved.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++		 http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++package factory
++
++import (
++	"github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric/bccsp"
++	"github.com/pkg/errors"
++)
++
++// FactoryOpts holds configuration information used to initialize factory implementations
++type FactoryOpts struct {
++	ProviderName string      `mapstructure:"default" json:"default" yaml:"Default"`
++	SwOpts       *SwOpts     `mapstructure:"SW,omitempty" json:"SW,omitempty" yaml:"SwOpts"`
++	PluginOpts   *PluginOpts `mapstructure:"PLUGIN,omitempty" json:"PLUGIN,omitempty" yaml:"PluginOpts"`
++}
++
++// InitFactories must be called before using factory interfaces
++// It is acceptable to call with config = nil, in which case
++// some defaults will get used
++// Error is returned only if defaultBCCSP cannot be found
++func InitFactories(config *FactoryOpts) error {
++	factoriesInitOnce.Do(func() {
++		// Take some precautions on default opts
++		if config == nil {
++			config = GetDefaultOpts()
++		}
++
++		if config.ProviderName == "" {
++			config.ProviderName = "SW"
++		}
++
++		if config.SwOpts == nil {
++			config.SwOpts = GetDefaultOpts().SwOpts
++		}
++
++		// Initialize factories map
++		bccspMap = make(map[string]bccsp.BCCSP)
++
++		// Software-Based BCCSP
++		if config.SwOpts != nil {
++			f := &GMFactory{}
++			err := initBCCSP(f, config)
++			if err != nil {
++				factoriesInitError = errors.Wrapf(err, "Failed initializing BCCSP.")
++			}
++		}
++
++		// BCCSP Plugin
++		if config.PluginOpts != nil {
++			f := &PluginFactory{}
++			err := initBCCSP(f, config)
++			if err != nil {
++				factoriesInitError = errors.Wrapf(err, "Failed initializing PKCS11.BCCSP %s", factoriesInitError)
++			}
++		}
++
++		var ok bool
++		defaultBCCSP, ok = bccspMap[config.ProviderName]
++		if !ok {
++			factoriesInitError = errors.Errorf("%s\nCould not find default `%s` BCCSP", factoriesInitError, config.ProviderName)
++		}
++	})
++
++	return factoriesInitError
++}
++
++// GetBCCSPFromOpts returns a BCCSP created according to the options passed in input.
++func GetBCCSPFromOpts(config *FactoryOpts) (bccsp.BCCSP, error) {
++	var f BCCSPFactory
++	switch config.ProviderName {
++	case "SW":
++		f = &GMFactory{}
++	case "PLUGIN":
++		f = &PluginFactory{}
++	default:
++		return nil, errors.Errorf("Could not find BCCSP, no '%s' provider", config.ProviderName)
++	}
++
++	csp, err := f.Get(config)
++	if err != nil {
++		return nil, errors.Wrapf(err, "Could not initialize BCCSP %s", f.Name())
++	}
++	return csp, nil
++}
+diff --git a/internal/github.com/hyperledger/fabric/bccsp/factory/opts.go b/internal/github.com/hyperledger/fabric/bccsp/factory/opts.go
+new file mode 100644
+index 00000000..927ee793
+--- /dev/null
++++ b/internal/github.com/hyperledger/fabric/bccsp/factory/opts.go
+@@ -0,0 +1,35 @@
++/*
++Copyright IBM Corp. 2016 All Rights Reserved.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++		 http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++package factory
++
++// GetDefaultOpts offers a default implementation for Opts
++// returns a new instance every time
++func GetDefaultOpts() *FactoryOpts {
++	return &FactoryOpts{
++		ProviderName: "SW",
++		SwOpts: &SwOpts{
++			HashFamily: "SHA2",
++			SecLevel:   256,
++
++			Ephemeral: true,
++		},
++	}
++}
++
++// FactoryName returns the name of the provider
++func (o *FactoryOpts) FactoryName() string {
++	return o.ProviderName
++}
+diff --git a/internal/github.com/hyperledger/fabric/bccsp/factory/pkcs11.go b/internal/github.com/hyperledger/fabric/bccsp/factory/pkcs11.go
+new file mode 100644
+index 00000000..ada59d67
+--- /dev/null
++++ b/internal/github.com/hyperledger/fabric/bccsp/factory/pkcs11.go
+@@ -0,0 +1,118 @@
++// +build pkcs11
++
++/*
++Copyright IBM Corp. 2017 All Rights Reserved.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++		 http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++package factory
++
++import (
++	"github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric/bccsp"
++	"github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric/bccsp/pkcs11"
++	"github.com/pkg/errors"
++)
++
++// FactoryOpts holds configuration information used to initialize factory implementations
++type FactoryOpts struct {
++	ProviderName string             `mapstructure:"default" json:"default" yaml:"Default"`
++	SwOpts       *SwOpts            `mapstructure:"SW,omitempty" json:"SW,omitempty" yaml:"SwOpts"`
++	PluginOpts   *PluginOpts        `mapstructure:"PLUGIN,omitempty" json:"PLUGIN,omitempty" yaml:"PluginOpts"`
++	Pkcs11Opts   *pkcs11.PKCS11Opts `mapstructure:"PKCS11,omitempty" json:"PKCS11,omitempty" yaml:"PKCS11"`
++}
++
++// InitFactories must be called before using factory interfaces
++// It is acceptable to call with config = nil, in which case
++// some defaults will get used
++// Error is returned only if defaultBCCSP cannot be found
++func InitFactories(config *FactoryOpts) error {
++	factoriesInitOnce.Do(func() {
++		setFactories(config)
++	})
++
++	return factoriesInitError
++}
++
++func setFactories(config *FactoryOpts) error {
++	// Take some precautions on default opts
++	if config == nil {
++		config = GetDefaultOpts()
++	}
++
++	if config.ProviderName == "" {
++		config.ProviderName = "SW"
++	}
++
++	if config.SwOpts == nil {
++		config.SwOpts = GetDefaultOpts().SwOpts
++	}
++
++	// Initialize factories map
++	bccspMap = make(map[string]bccsp.BCCSP)
++
++	// Software-Based BCCSP
++	if config.SwOpts != nil {
++		f := &GMFactory{}
++		err := initBCCSP(f, config)
++		if err != nil {
++			factoriesInitError = errors.Wrap(err, "Failed initializing SW.BCCSP")
++		}
++	}
++
++	// PKCS11-Based BCCSP
++	if config.Pkcs11Opts != nil {
++		f := &PKCS11Factory{}
++		err := initBCCSP(f, config)
++		if err != nil {
++			factoriesInitError = errors.Wrapf(err, "Failed initializing PKCS11.BCCSP %s", factoriesInitError)
++		}
++	}
++
++	// BCCSP Plugin
++	if config.PluginOpts != nil {
++		f := &PluginFactory{}
++		err := initBCCSP(f, config)
++		if err != nil {
++			factoriesInitError = errors.Wrapf(err, "Failed initializing PKCS11.BCCSP %s", factoriesInitError)
++		}
++	}
++
++	var ok bool
++	defaultBCCSP, ok = bccspMap[config.ProviderName]
++	if !ok {
++		factoriesInitError = errors.Errorf("%s\nCould not find default `%s` BCCSP", factoriesInitError, config.ProviderName)
++	}
++
++	return factoriesInitError
++}
++
++// GetBCCSPFromOpts returns a BCCSP created according to the options passed in input.
++func GetBCCSPFromOpts(config *FactoryOpts) (bccsp.BCCSP, error) {
++	var f BCCSPFactory
++	switch config.ProviderName {
++	case "SW":
++		f = &GMFactory{}
++	case "PKCS11":
++		f = &PKCS11Factory{}
++	case "PLUGIN":
++		f = &PluginFactory{}
++	default:
++		return nil, errors.Errorf("Could not find BCCSP, no '%s' provider", config.ProviderName)
++	}
++
++	csp, err := f.Get(config)
++	if err != nil {
++		return nil, errors.Wrapf(err, "Could not initialize BCCSP %s", f.Name())
++	}
++	return csp, nil
++}
+diff --git a/internal/github.com/hyperledger/fabric/bccsp/factory/pkcs11/pkcs11factory.go b/internal/github.com/hyperledger/fabric/bccsp/factory/pkcs11factory.go
+similarity index 87%
+rename from internal/github.com/hyperledger/fabric/bccsp/factory/pkcs11/pkcs11factory.go
+rename to internal/github.com/hyperledger/fabric/bccsp/factory/pkcs11factory.go
+index 98e1c5a6..661a6948 100644
+--- a/internal/github.com/hyperledger/fabric/bccsp/factory/pkcs11/pkcs11factory.go
++++ b/internal/github.com/hyperledger/fabric/bccsp/factory/pkcs11factory.go
+@@ -1,3 +1,5 @@
++// +build pkcs11
++
+ /*
+ Copyright IBM Corp. 2016 All Rights Reserved.
+ 
+@@ -13,11 +15,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+ */
+-/*
+-Notice: This file has been modified for Hyperledger Fabric SDK Go usage.
+-Please review third_party pinning scripts and patches for more details.
+-*/
+-package pkcs11
++package factory
+ 
+ import (
+ 	"github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric/bccsp"
+@@ -40,12 +38,14 @@ func (f *PKCS11Factory) Name() string {
+ }
+ 
+ // Get returns an instance of BCCSP using Opts.
+-func (f *PKCS11Factory) Get(p11Opts *pkcs11.PKCS11Opts) (bccsp.BCCSP, error) {
++func (f *PKCS11Factory) Get(config *FactoryOpts) (bccsp.BCCSP, error) {
+ 	// Validate arguments
+-	if p11Opts == nil {
++	if config == nil || config.Pkcs11Opts == nil {
+ 		return nil, errors.New("Invalid config. It must not be nil.")
+ 	}
+ 
++	p11Opts := config.Pkcs11Opts
++
+ 	//TODO: PKCS11 does not need a keystore, but we have not migrated all of PKCS11 BCCSP to PKCS11 yet
+ 	var ks bccsp.KeyStore
+ 	if p11Opts.Ephemeral == true {
+diff --git a/internal/github.com/hyperledger/fabric/bccsp/factory/plugin/pluginfactory.go b/internal/github.com/hyperledger/fabric/bccsp/factory/pluginfactory.go
+similarity index 67%
+rename from internal/github.com/hyperledger/fabric/bccsp/factory/plugin/pluginfactory.go
+rename to internal/github.com/hyperledger/fabric/bccsp/factory/pluginfactory.go
+index 12fc8a00..4bb8ff4e 100644
+--- a/internal/github.com/hyperledger/fabric/bccsp/factory/plugin/pluginfactory.go
++++ b/internal/github.com/hyperledger/fabric/bccsp/factory/pluginfactory.go
+@@ -3,11 +3,7 @@ Copyright IBM Corp. All Rights Reserved.
+ 
+ SPDX-License-Identifier: Apache-2.0
+ */
+-/*
+-Notice: This file has been modified for Hyperledger Fabric SDK Go usage.
+-Please review third_party pinning scripts and patches for more details.
+-*/
+-package plugin
++package factory
+ 
+ import (
+ 	"errors"
+@@ -40,26 +36,26 @@ func (f *PluginFactory) Name() string {
+ }
+ 
+ // Get returns an instance of BCCSP using Opts.
+-func (f *PluginFactory) Get(pluginOpts *PluginOpts) (bccsp.BCCSP, error) {
++func (f *PluginFactory) Get(config *FactoryOpts) (bccsp.BCCSP, error) {
+ 	// check for valid config
+-	if pluginOpts == nil {
++	if config == nil || config.PluginOpts == nil {
+ 		return nil, errors.New("Invalid config. It must not be nil.")
+ 	}
+ 
+ 	// Library is required property
+-	if pluginOpts.Library == "" {
++	if config.PluginOpts.Library == "" {
+ 		return nil, errors.New("Invalid config: missing property 'Library'")
+ 	}
+ 
+ 	// make sure the library exists
+-	if _, err := os.Stat(pluginOpts.Library); err != nil {
+-		return nil, fmt.Errorf("Could not find library '%s' [%s]", pluginOpts.Library, err)
++	if _, err := os.Stat(config.PluginOpts.Library); err != nil {
++		return nil, fmt.Errorf("Could not find library '%s' [%s]", config.PluginOpts.Library, err)
+ 	}
+ 
+ 	// attempt to load the library as a plugin
+-	plug, err := plugin.Open(pluginOpts.Library)
++	plug, err := plugin.Open(config.PluginOpts.Library)
+ 	if err != nil {
+-		return nil, fmt.Errorf("Failed to load plugin '%s' [%s]", pluginOpts.Library, err)
++		return nil, fmt.Errorf("Failed to load plugin '%s' [%s]", config.PluginOpts.Library, err)
+ 	}
+ 
+ 	// lookup the required symbol 'New'
+@@ -69,10 +65,10 @@ func (f *PluginFactory) Get(pluginOpts *PluginOpts) (bccsp.BCCSP, error) {
+ 	}
+ 
+ 	// check to make sure symbol New meets the required function signature
+-	new, ok := sym.(func(config map[string]interface{}) (bccsp.BCCSP, error))
++	newFunc, ok := sym.(func(config map[string]interface{}) (bccsp.BCCSP, error))
+ 	if !ok {
+ 		return nil, fmt.Errorf("Plugin does not implement the required function signature for 'New'")
+ 	}
+ 
+-	return new(pluginOpts.Config)
++	return newFunc(config.PluginOpts.Config)
+ }
+diff --git a/internal/github.com/hyperledger/fabric/bccsp/factory/sw/swfactory.go b/internal/github.com/hyperledger/fabric/bccsp/factory/swfactory.go
+similarity index 91%
+rename from internal/github.com/hyperledger/fabric/bccsp/factory/sw/swfactory.go
+rename to internal/github.com/hyperledger/fabric/bccsp/factory/swfactory.go
+index 57d0ef8d..8e5e0e2d 100644
+--- a/internal/github.com/hyperledger/fabric/bccsp/factory/sw/swfactory.go
++++ b/internal/github.com/hyperledger/fabric/bccsp/factory/swfactory.go
+@@ -13,11 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+ */
+-/*
+-Notice: This file has been modified for Hyperledger Fabric SDK Go usage.
+-Please review third_party pinning scripts and patches for more details.
+-*/
+-package sw
++package factory
+ 
+ import (
+ 	"github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric/bccsp"
+@@ -39,12 +35,14 @@ func (f *SWFactory) Name() string {
+ }
+ 
+ // Get returns an instance of BCCSP using Opts.
+-func (f *SWFactory) Get(swOpts *SwOpts) (bccsp.BCCSP, error) {
++func (f *SWFactory) Get(config *FactoryOpts) (bccsp.BCCSP, error) {
+ 	// Validate arguments
+-	if swOpts == nil {
++	if config == nil || config.SwOpts == nil {
+ 		return nil, errors.New("Invalid config. It must not be nil.")
+ 	}
+ 
++	swOpts := config.SwOpts
++
+ 	var ks bccsp.KeyStore
+ 	if swOpts.Ephemeral == true {
+ 		ks = sw.NewDummyKeyStore()
+diff --git a/internal/github.com/hyperledger/fabric/bccsp/gm/fileks.go b/internal/github.com/hyperledger/fabric/bccsp/gm/fileks.go
+new file mode 100644
+index 00000000..41ecbe51
+--- /dev/null
++++ b/internal/github.com/hyperledger/fabric/bccsp/gm/fileks.go
+@@ -0,0 +1,407 @@
++/*
++Copyright IBM Corp. 2016 All Rights Reserved.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++		 http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++package gm
++
++import (
++	"bytes"
++	"io/ioutil"
++	"os"
++	"sync"
++
++	"errors"
++	"strings"
++
++	"encoding/hex"
++	"fmt"
++	"path/filepath"
++
++	"github.com/swordboy/crypto/sm/sm2"
++	"github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric/bccsp"
++	"github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric/bccsp/sw"
++	"github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric/bccsp/utils"
++)
++
++// NewFileBasedKeyStore instantiated a file-based key store at a given position.
++// The key store can be encrypted if a non-empty password is specifiec.
++// It can be also be set as read only. In this case, any store operation
++// will be forbidden
++func NewFileBasedKeyStore(pwd []byte, path string, readOnly bool) (bccsp.KeyStore, error) {
++	o, err := sw.NewFileBasedKeyStore(pwd, path, readOnly)
++	if err != nil {
++		return nil, err
++	}
++	ks := &fileBasedKeyStore{k: o}
++	return ks, ks.Init(pwd, path, readOnly)
++}
++
++// fileBasedKeyStore is a folder-based KeyStore.
++// Each key is stored in a separated file whose name contains the key's SKI
++// and flags to identity the key's type. All the keys are stored in
++// a folder whose path is provided at initialization time.
++// The KeyStore can be initialized with a password, this password
++// is used to encrypt and decrypt the files storing the keys.
++// A KeyStore can be read only to avoid the overwriting of keys.
++type fileBasedKeyStore struct {
++	path string
++
++	readOnly bool
++	isOpen   bool
++
++	pwd []byte
++
++	// Sync
++	m sync.Mutex
++
++	k bccsp.KeyStore
++}
++
++// Init initializes this KeyStore with a password, a path to a folder
++// where the keys are stored and a read only flag.
++// Each key is stored in a separated file whose name contains the key's SKI
++// and flags to identity the key's type.
++// If the KeyStore is initialized with a password, this password
++// is used to encrypt and decrypt the files storing the keys.
++// The pwd can be nil for non-encrypted KeyStores. If an encrypted
++// key-store is initialized without a password, then retrieving keys from the
++// KeyStore will fail.
++// A KeyStore can be read only to avoid the overwriting of keys.
++func (ks *fileBasedKeyStore) Init(pwd []byte, path string, readOnly bool) error {
++	// Validate inputs
++	// pwd can be nil
++
++	if len(path) == 0 {
++		return errors.New("An invalid KeyStore path provided. Path cannot be an empty string.")
++	}
++
++	ks.m.Lock()
++	defer ks.m.Unlock()
++
++	if ks.isOpen {
++		return errors.New("KeyStore already initilized.")
++	}
++
++	ks.path = path
++	ks.pwd = utils.Clone(pwd)
++
++	err := ks.createKeyStoreIfNotExists()
++	if err != nil {
++		return err
++	}
++
++	err = ks.openKeyStore()
++	if err != nil {
++		return err
++	}
++
++	ks.readOnly = readOnly
++
++	return nil
++}
++
++// ReadOnly returns true if this KeyStore is read only, false otherwise.
++// If ReadOnly is true then StoreKey will fail.
++func (ks *fileBasedKeyStore) ReadOnly() bool {
++	return ks.readOnly
++}
++
++// GetKey returns a key object whose SKI is the one passed.
++func (ks *fileBasedKeyStore) GetKey(ski []byte) (k bccsp.Key, err error) {
++	// Validate arguments
++	if len(ski) == 0 {
++		return nil, errors.New("Invalid SKI. Cannot be of zero length.")
++	}
++
++	suffix := ks.getSuffix(hex.EncodeToString(ski))
++
++	switch suffix {
++	case "sk":
++		// Load the private key
++		key, err := ks.loadPrivateKey(hex.EncodeToString(ski))
++		if err != nil {
++			return nil, fmt.Errorf("Failed loading secret key [%x] [%s]", ski, err)
++		}
++
++		switch key.(type) {
++		case *sm2.PrivateKey:
++			return &sm2PrivateKey{key.(*sm2.PrivateKey)}, nil
++		default:
++			return ks.k.GetKey(ski)
++		}
++	case "pk":
++		// Load the public key
++		key, err := ks.loadPublicKey(hex.EncodeToString(ski))
++		if err != nil {
++			return nil, fmt.Errorf("Failed loading public key [%x] [%s]", ski, err)
++		}
++
++		switch key.(type) {
++		case *sm2.PublicKey:
++			return &sm2PublicKey{key.(*sm2.PublicKey)}, nil
++		default:
++			return ks.k.GetKey(ski)
++		}
++	default:
++		key, err := ks.searchKeystoreForSKI(ski)
++		if err != nil {
++			return ks.k.GetKey(ski)
++		}
++		return key, nil
++	}
++}
++
++// StoreKey stores the key k in this KeyStore.
++// If this KeyStore is read only then the method will fail.
++func (ks *fileBasedKeyStore) StoreKey(k bccsp.Key) (err error) {
++	if ks.readOnly {
++		return errors.New("Read only KeyStore.")
++	}
++
++	if k == nil {
++		return errors.New("Invalid key. It must be different from nil.")
++	}
++	switch k.(type) {
++	case *sm2PrivateKey:
++		kk := k.(*sm2PrivateKey)
++
++		err = ks.storePrivateKey(hex.EncodeToString(k.SKI()), kk.privKey)
++		if err != nil {
++			return fmt.Errorf("Failed storing sm2 private key [%s]", err)
++		}
++	case *sm2PublicKey:
++		kk := k.(*sm2PublicKey)
++
++		err = ks.storePublicKey(hex.EncodeToString(k.SKI()), kk.pubKey)
++		if err != nil {
++			return fmt.Errorf("Failed storing sm2 public key [%s]", err)
++		}
++
++	default:
++		return ks.k.StoreKey(k)
++	}
++
++	return
++}
++
++func (ks *fileBasedKeyStore) searchKeystoreForSKI(ski []byte) (k bccsp.Key, err error) {
++
++	files, _ := ioutil.ReadDir(ks.path)
++	for _, f := range files {
++		if f.IsDir() {
++			continue
++		}
++
++		if f.Size() > (1 << 16) { //64k, somewhat arbitrary limit, considering even large RSA keys
++			continue
++		}
++
++		raw, err := ioutil.ReadFile(filepath.Join(ks.path, f.Name()))
++		if err != nil {
++			continue
++		}
++
++		key, err := PEMtoPrivateKey(raw, ks.pwd)
++		if err != nil {
++			continue
++		}
++
++		switch key.(type) {
++		case *sm2.PrivateKey:
++			k = &sm2PrivateKey{key.(*sm2.PrivateKey)}
++		default:
++			continue
++		}
++
++		if !bytes.Equal(k.SKI(), ski) {
++			continue
++		}
++
++		return k, nil
++	}
++	return nil, fmt.Errorf("Key with SKI %s not found in %s", hex.EncodeToString(ski), ks.path)
++}
++
++func (ks *fileBasedKeyStore) getSuffix(alias string) string {
++	files, _ := ioutil.ReadDir(ks.path)
++	for _, f := range files {
++		if strings.HasPrefix(f.Name(), alias) {
++			if strings.HasSuffix(f.Name(), "sk") {
++				return "sk"
++			}
++			if strings.HasSuffix(f.Name(), "pk") {
++				return "pk"
++			}
++			if strings.HasSuffix(f.Name(), "key") {
++				return "key"
++			}
++			break
++		}
++	}
++	return ""
++}
++
++func (ks *fileBasedKeyStore) storePrivateKey(alias string, privateKey interface{}) error {
++	rawKey, err := PrivateKeyToPEM(privateKey, ks.pwd)
++	if err != nil {
++		logger.Errorf("Failed converting private key to PEM [%s]: [%s]", alias, err)
++		return err
++	}
++
++	err = ioutil.WriteFile(ks.getPathForAlias(alias, "sk"), rawKey, 0700)
++	if err != nil {
++		logger.Errorf("Failed storing private key [%s]: [%s]", alias, err)
++		return err
++	}
++
++	return nil
++}
++
++func (ks *fileBasedKeyStore) storePublicKey(alias string, publicKey interface{}) error {
++	rawKey, err := PublicKeyToPEM(publicKey, ks.pwd)
++	if err != nil {
++		logger.Errorf("Failed converting public key to PEM [%s]: [%s]", alias, err)
++		return err
++	}
++
++	err = ioutil.WriteFile(ks.getPathForAlias(alias, "pk"), rawKey, 0700)
++	if err != nil {
++		logger.Errorf("Failed storing private key [%s]: [%s]", alias, err)
++		return err
++	}
++
++	return nil
++}
++
++func (ks *fileBasedKeyStore) storeKey(alias string, key []byte) error {
++	pem, err := utils.AEStoEncryptedPEM(key, ks.pwd)
++	if err != nil {
++		logger.Errorf("Failed converting key to PEM [%s]: [%s]", alias, err)
++		return err
++	}
++
++	err = ioutil.WriteFile(ks.getPathForAlias(alias, "key"), pem, 0700)
++	if err != nil {
++		logger.Errorf("Failed storing key [%s]: [%s]", alias, err)
++		return err
++	}
++
++	return nil
++}
++
++func (ks *fileBasedKeyStore) loadPrivateKey(alias string) (interface{}, error) {
++	path := ks.getPathForAlias(alias, "sk")
++	logger.Debugf("Loading private key [%s] at [%s]...", alias, path)
++
++	raw, err := ioutil.ReadFile(path)
++	if err != nil {
++		logger.Errorf("Failed loading private key [%s]: [%s].", alias, err.Error())
++
++		return nil, err
++	}
++
++	privateKey, err := PEMtoPrivateKey(raw, ks.pwd)
++	if err != nil {
++		logger.Errorf("Failed parsing private key [%s]: [%s].", alias, err.Error())
++
++		return nil, err
++	}
++
++	return privateKey, nil
++}
++
++func (ks *fileBasedKeyStore) loadPublicKey(alias string) (interface{}, error) {
++	path := ks.getPathForAlias(alias, "pk")
++	logger.Debugf("Loading public key [%s] at [%s]...", alias, path)
++
++	raw, err := ioutil.ReadFile(path)
++	if err != nil {
++		logger.Errorf("Failed loading public key [%s]: [%s].", alias, err.Error())
++
++		return nil, err
++	}
++
++	privateKey, err := PEMtoPublicKey(raw, ks.pwd)
++	if err != nil {
++		logger.Errorf("Failed parsing private key [%s]: [%s].", alias, err.Error())
++
++		return nil, err
++	}
++
++	return privateKey, nil
++}
++
++func (ks *fileBasedKeyStore) loadKey(alias string) ([]byte, error) {
++	path := ks.getPathForAlias(alias, "key")
++	logger.Debugf("Loading key [%s] at [%s]...", alias, path)
++
++	pem, err := ioutil.ReadFile(path)
++	if err != nil {
++		logger.Errorf("Failed loading key [%s]: [%s].", alias, err.Error())
++
++		return nil, err
++	}
++
++	key, err := PEMtoAES(pem, ks.pwd)
++	if err != nil {
++		logger.Errorf("Failed parsing key [%s]: [%s]", alias, err)
++
++		return nil, err
++	}
++
++	return key, nil
++}
++
++func (ks *fileBasedKeyStore) createKeyStoreIfNotExists() error {
++	// Check keystore directory
++	ksPath := ks.path
++	missing, err := utils.DirMissingOrEmpty(ksPath)
++
++	if missing {
++		logger.Debugf("KeyStore path [%s] missing [%t]: [%s]", ksPath, missing, utils.ErrToString(err))
++
++		err := ks.createKeyStore()
++		if err != nil {
++			logger.Errorf("Failed creating KeyStore At [%s]: [%s]", ksPath, err.Error())
++			return nil
++		}
++	}
++
++	return nil
++}
++
++func (ks *fileBasedKeyStore) createKeyStore() error {
++	// Create keystore directory root if it doesn't exist yet
++	ksPath := ks.path
++	logger.Debugf("Creating KeyStore at [%s]...", ksPath)
++
++	os.MkdirAll(ksPath, 0755)
++
++	logger.Debugf("KeyStore created at [%s].", ksPath)
++	return nil
++}
++
++func (ks *fileBasedKeyStore) openKeyStore() error {
++	if ks.isOpen {
++		return nil
++	}
++
++	logger.Debugf("KeyStore opened at [%s]...done", ks.path)
++
++	return nil
++}
++
++func (ks *fileBasedKeyStore) getPathForAlias(alias, suffix string) string {
++	return filepath.Join(ks.path, alias+"_"+suffix)
++}
+diff --git a/internal/github.com/hyperledger/fabric/bccsp/gm/impl.go b/internal/github.com/hyperledger/fabric/bccsp/gm/impl.go
+new file mode 100644
+index 00000000..1ac5ce21
+--- /dev/null
++++ b/internal/github.com/hyperledger/fabric/bccsp/gm/impl.go
+@@ -0,0 +1,362 @@
++/*
++Copyright IBM Corp. All Rights Reserved.
++
++SPDX-License-Identifier: Apache-2.0
++*/
++package gm
++
++import (
++	"hash"
++
++	"crypto/rand"
++	"fmt"
++	"github.com/swordboy/crypto/sm/sm2"
++	"github.com/swordboy/crypto/sm/sm3"
++	"github.com/swordboy/crypto/x509"
++	"math/big"
++
++	origx509 "crypto/x509"
++
++	"github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric/bccsp"
++	"github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric/bccsp/sw"
++	flogging "github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric/sdkpatch/logbridge"
++	"github.com/pkg/errors"
++)
++
++var (
++	logger = flogging.MustGetLogger("plugin_sm")
++)
++
++type impl struct {
++	sw bccsp.BCCSP
++	ks bccsp.KeyStore
++}
++
++func getKeyStoreDir(keystore string) (string, error) {
++	return keystore, nil
++}
++
++// New returns a new instance of the BCCSP implementation
++func New(keystore string) (bccsp.BCCSP, error) {
++
++	var (
++		swCsp bccsp.BCCSP
++		ks    bccsp.KeyStore
++		err   error
++	)
++
++	keyStorePath, err := getKeyStoreDir(keystore)
++	if err != nil {
++		return nil, err
++	}
++
++	if keyStorePath == "" {
++		ks = sw.NewDummyKeyStore()
++		swCsp, err = sw.NewDefaultSecurityLevelWithKeystore(ks)
++		if err != nil {
++			return nil, err
++		}
++		return &impl{sw: swCsp, ks: ks}, nil
++	}
++
++	//TODO: fengjj,通过配置指定hash算法？？
++	swCsp, err = sw.NewDefaultSecurityLevel(keyStorePath)
++	if err != nil {
++		return nil, err
++	}
++
++	ks, err = NewFileBasedKeyStore(nil, keyStorePath, false)
++	if err != nil {
++		return nil, err
++	}
++
++	return &impl{sw: swCsp, ks: ks}, nil
++}
++
++// KeyGen generates a key using opts.
++func (csp *impl) KeyGen(opts bccsp.KeyGenOpts) (k bccsp.Key, err error) {
++	switch opts.(type) {
++	case *bccsp.SM2KeyGenOpts:
++		privKey, err := sm2.GenerateKey(rand.Reader)
++		if err != nil {
++			return nil, fmt.Errorf("Failed generating SM2 key for : [%s]", err)
++		}
++
++		k = &sm2PrivateKey{privKey}
++
++		if !opts.Ephemeral() {
++			// Store the key
++			err = csp.ks.StoreKey(k)
++			if err != nil {
++				return nil, errors.Wrapf(err, "Failed storing imported key with opts [%v]", opts)
++			}
++		}
++
++		return k, nil
++	default:
++		return csp.sw.KeyGen(opts)
++	}
++
++}
++
++// KeyDeriv derives a key from k using opts.
++// The opts argument should be appropriate for the primitive used.
++func (csp *impl) KeyDeriv(k bccsp.Key, opts bccsp.KeyDerivOpts) (dk bccsp.Key, err error) {
++	switch k := k.(type) {
++	case *sm2PrivateKey:
++		// Validate opts
++		if opts == nil {
++			return nil, errors.New("Invalid opts parameter. It must not be nil.")
++		}
++
++		sm2K := k
++
++		switch opts.(type) {
++		// Re-randomized an ECDSA private key
++		case *bccsp.SM2ReRandKeyOpts:
++			reRandOpts := opts.(*bccsp.SM2ReRandKeyOpts)
++			tempSK := &sm2.PrivateKey{
++				PublicKey: sm2.PublicKey{
++					Curve: sm2K.privKey.Curve,
++					X:     new(big.Int),
++					Y:     new(big.Int),
++				},
++				D: new(big.Int),
++			}
++
++			var k = new(big.Int).SetBytes(reRandOpts.ExpansionValue())
++			var one = new(big.Int).SetInt64(1)
++			n := new(big.Int).Sub(sm2K.privKey.Params().N, one)
++			k.Mod(k, n)
++			k.Add(k, one)
++
++			tempSK.D.Add(sm2K.privKey.D, k)
++			tempSK.D.Mod(tempSK.D, sm2K.privKey.PublicKey.Params().N)
++
++			// Compute temporary public key
++			tempX, tempY := sm2K.privKey.PublicKey.ScalarBaseMult(k.Bytes())
++			tempSK.PublicKey.X, tempSK.PublicKey.Y =
++				tempSK.PublicKey.Add(
++					sm2K.privKey.PublicKey.X, sm2K.privKey.PublicKey.Y,
++					tempX, tempY,
++				)
++
++			// Verify temporary public key is a valid point on the reference curve
++			isOn := tempSK.Curve.IsOnCurve(tempSK.PublicKey.X, tempSK.PublicKey.Y)
++			if !isOn {
++				return nil, errors.New("Failed temporary public key IsOnCurve check.")
++			}
++
++			return &sm2PrivateKey{tempSK}, nil
++		default:
++			return nil, fmt.Errorf("Unsupported 'KeyDerivOpts' provided [%v]", opts)
++		}
++	case *sm2PublicKey:
++		// Validate opts
++		if opts == nil {
++			return nil, errors.New("Invalid opts parameter. It must not be nil.")
++		}
++
++		sm2K := k
++
++		switch opts.(type) {
++		// Re-randomized an ECDSA private key
++		case *bccsp.SM2ReRandKeyOpts:
++			reRandOpts := opts.(*bccsp.SM2ReRandKeyOpts)
++			tempSK := &sm2.PublicKey{
++				Curve: sm2K.pubKey.Curve,
++				X:     new(big.Int),
++				Y:     new(big.Int),
++			}
++
++			var k = new(big.Int).SetBytes(reRandOpts.ExpansionValue())
++			var one = new(big.Int).SetInt64(1)
++			n := new(big.Int).Sub(sm2K.pubKey.Params().N, one)
++			k.Mod(k, n)
++			k.Add(k, one)
++
++			// Compute temporary public key
++			tempX, tempY := sm2K.pubKey.ScalarBaseMult(k.Bytes())
++			tempSK.X, tempSK.Y = tempSK.Add(
++				sm2K.pubKey.X, sm2K.pubKey.Y,
++				tempX, tempY,
++			)
++
++			// Verify temporary public key is a valid point on the reference curve
++			isOn := tempSK.Curve.IsOnCurve(tempSK.X, tempSK.Y)
++			if !isOn {
++				return nil, errors.New("Failed temporary public key IsOnCurve check.")
++			}
++
++			return &sm2PublicKey{tempSK}, nil
++		default:
++			return nil, fmt.Errorf("Unsupported 'KeyDerivOpts' provided [%v]", opts)
++		}
++	default:
++		return csp.sw.KeyDeriv(k, opts)
++	}
++}
++
++// KeyImport imports a key from its raw representation using opts.
++// The opts argument should be appropriate for the primitive used.
++func (csp *impl) KeyImport(raw interface{}, opts bccsp.KeyImportOpts) (k bccsp.Key, err error) {
++	switch opts.(type) {
++	case *bccsp.SM2PKIXPublicKeyImportOpts:
++		der, ok := raw.([]byte)
++		if !ok {
++			return nil, errors.New("Invalid raw material. Expected byte array.")
++		}
++
++		if len(der) == 0 {
++			return nil, errors.New("Invalid raw. It must not be nil.")
++		}
++
++		lowLevelKey, err := DERToPublicKey(der)
++		if err != nil {
++			return nil, fmt.Errorf("Failed converting PKIX to ECDSA public key [%s]", err)
++		}
++
++		sm2PK, ok := lowLevelKey.(*sm2.PublicKey)
++		if !ok {
++			return nil, errors.New("Failed casting to ECDSA public key. Invalid raw material.")
++		}
++
++		return &sm2PublicKey{sm2PK}, nil
++	case *bccsp.SM2PrivateKeyImportOpts:
++		der, ok := raw.([]byte)
++		if !ok {
++			return nil, errors.New("[SM2PrivateKeyImportOpts] Invalid raw material. Expected byte array.")
++		}
++
++		if len(der) == 0 {
++			return nil, errors.New("[SM2PrivateKeyImportOpts] Invalid raw. It must not be nil.")
++		}
++
++		lowLevelKey, err := DERToPrivateKey(der)
++		if err != nil {
++			return nil, fmt.Errorf("Failed converting PKIX to SM2 private key [%s]", err)
++		}
++
++		sm2SK, ok := lowLevelKey.(*sm2.PrivateKey)
++		if !ok {
++			return nil, errors.New("Failed casting to SM2 private key. Invalid raw material.")
++		}
++
++		return &sm2PrivateKey{sm2SK}, nil
++	case *bccsp.SM2GoPublicKeyImportOpts:
++		lowLevelKey, ok := raw.(*sm2.PublicKey)
++		if !ok {
++			return nil, errors.New("Invalid raw material. Expected *sm2.PublicKey.")
++		}
++
++		return &sm2PublicKey{lowLevelKey}, nil
++	case *bccsp.X509PublicKeyImportOpts:
++		x509Cert, ok := raw.(*x509.Certificate)
++		if !ok {
++			return nil, errors.New("Invalid raw material. Expected *x509.Certificate.")
++		}
++
++		//if pk, ok := x509Cert.PublicKey.(*sm2.PublicKey); ok {
++		//	return &sm2PublicKey{pk}, nil
++		//} else {
++		//	return csp.sw.KeyImport(raw, opts)
++		//}
++		pk := x509Cert.PublicKey
++
++		switch pk.(type) {
++		case *sm2.PublicKey:
++			return &sm2PublicKey{pk.(*sm2.PublicKey)}, nil
++		default:
++			//convert to origin x509
++			origCert, err := origx509.ParseCertificate(raw.(*x509.Certificate).Raw)
++			if err != nil {
++				return nil, errors.New("Invalid raw material. can't do x509 converting from swordboy x509 to origin x509.")
++			}
++			return csp.sw.KeyImport(origCert, opts)
++		}
++	default:
++		return csp.sw.KeyImport(raw, opts)
++	}
++}
++
++// GetKey returns the key this CSP associates to
++// the Subject Key Identifier ski.
++func (csp *impl) GetKey(ski []byte) (k bccsp.Key, err error) {
++	if k, err := csp.ks.GetKey(ski); err == nil {
++		return k, err
++	} else {
++		return csp.sw.GetKey(ski)
++	}
++}
++
++// Hash hashes messages msg using options opts.
++// If opts is nil, the default hash function will be used.
++func (csp *impl) Hash(msg []byte, opts bccsp.HashOpts) (hash []byte, err error) {
++	switch opts.(type) {
++	//SHAOpts是SDK默认的hash选项，使用国密实现时，应当默认使用SM3
++	case *bccsp.SM3Opts, *bccsp.SHAOpts:
++		h := sm3.New()
++		h.Write(msg)
++		return h.Sum(nil), nil
++	case *bccsp.SM3SIGOpts:
++		h := NewSM3Sig()
++		h.Write(msg)
++		return h.Sum(nil), nil
++	default:
++		return csp.sw.Hash(msg, opts)
++	}
++}
++
++// GetHash returns and instance of hash.Hash using options opts.
++// If opts is nil, the default hash function will be returned.
++func (csp *impl) GetHash(opts bccsp.HashOpts) (h hash.Hash, err error) {
++	switch opts.(type) {
++	//SHAOpts是SDK默认的hash选项，使用国密实现时，应当默认使用SM3
++	case *bccsp.SM3Opts, *bccsp.SHAOpts:
++		return sm3.New(), nil
++	case *bccsp.SM3SIGOpts:
++		return
++	default:
++		return csp.sw.GetHash(opts)
++	}
++}
++
++// Sign signs digest using key k.
++// The opts argument should be appropriate for the algorithm used.
++//
++// Note that when a signature of a hash of a larger message is needed,
++// the caller is responsible for hashing the larger message and passing
++// the hash (as digest).
++func (csp *impl) Sign(k bccsp.Key, digest []byte, opts bccsp.SignerOpts) (signature []byte, err error) {
++	switch k := k.(type) {
++	case *sm2PrivateKey:
++		return signSM2(k.privKey, digest, opts)
++	default:
++		return csp.sw.Sign(k, digest, opts)
++	}
++}
++
++// Verify verifies signature against key k and digest
++// The opts argument should be appropriate for the algorithm used.
++func (csp *impl) Verify(k bccsp.Key, signature, digest []byte, opts bccsp.SignerOpts) (valid bool, err error) {
++	switch k := k.(type) {
++	case *sm2PrivateKey:
++		return verifySM2(&(k.privKey.PublicKey), signature, digest, opts)
++	case *sm2PublicKey:
++		return verifySM2(k.pubKey, signature, digest, opts)
++	default:
++		return csp.sw.Verify(k, signature, digest, opts)
++	}
++}
++
++// Encrypt encrypts plaintext using key k.
++// The opts argument should be appropriate for the algorithm used.
++func (csp *impl) Encrypt(k bccsp.Key, plaintext []byte, opts bccsp.EncrypterOpts) (ciphertext []byte, err error) {
++	return nil, nil
++}
++
++// Decrypt decrypts ciphertext using key k.
++// The opts argument should be appropriate for the algorithm used.
++func (csp *impl) Decrypt(k bccsp.Key, ciphertext []byte, opts bccsp.DecrypterOpts) (plaintext []byte, err error) {
++	return nil, nil
++}
+diff --git a/internal/github.com/hyperledger/fabric/bccsp/gm/keys.go b/internal/github.com/hyperledger/fabric/bccsp/gm/keys.go
+new file mode 100644
+index 00000000..05558117
+--- /dev/null
++++ b/internal/github.com/hyperledger/fabric/bccsp/gm/keys.go
+@@ -0,0 +1,421 @@
++/*
++Copyright IBM Corp. 2016 All Rights Reserved.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++		 http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package gm
++
++import (
++	"crypto/ecdsa"
++	"crypto/elliptic"
++	"crypto/rand"
++	"crypto/rsa"
++	"encoding/asn1"
++	"encoding/pem"
++	"errors"
++	"fmt"
++
++	"github.com/swordboy/crypto/sm/sm2"
++	"github.com/swordboy/crypto/x509"
++)
++
++// struct to hold info required for PKCS#8
++type pkcs8Info struct {
++	Version             int
++	PrivateKeyAlgorithm []asn1.ObjectIdentifier
++	PrivateKey          []byte
++}
++
++type ecPrivateKey struct {
++	Version       int
++	PrivateKey    []byte
++	NamedCurveOID asn1.ObjectIdentifier `asn1:"optional,explicit,tag:0"`
++	PublicKey     asn1.BitString        `asn1:"optional,explicit,tag:1"`
++}
++
++var (
++	oidNamedCurveP224 = asn1.ObjectIdentifier{1, 3, 132, 0, 33}
++	oidNamedCurveP256 = asn1.ObjectIdentifier{1, 2, 840, 10045, 3, 1, 7}
++	oidNamedCurveP384 = asn1.ObjectIdentifier{1, 3, 132, 0, 34}
++	oidNamedCurveP521 = asn1.ObjectIdentifier{1, 3, 132, 0, 35}
++	//SM2曲线OID
++	oidNamedCurveP256SM2 = asn1.ObjectIdentifier{1, 2, 156, 10197, 1, 301}
++)
++
++var oidPublicKeyECDSA = asn1.ObjectIdentifier{1, 2, 840, 10045, 2, 1}
++//SM公钥算法的OID
++var oidPublicKeySM2 = asn1.ObjectIdentifier{1, 2, 156, 197, 301, 1}
++
++func oidFromNamedCurve(curve elliptic.Curve) (asn1.ObjectIdentifier, bool) {
++	switch curve {
++	case sm2.P256Sm2():
++		return oidNamedCurveP256SM2, true
++	case elliptic.P224():
++		return oidNamedCurveP224, true
++	case elliptic.P256():
++		return oidNamedCurveP256, true
++	case elliptic.P384():
++		return oidNamedCurveP384, true
++	case elliptic.P521():
++		return oidNamedCurveP521, true
++	}
++	return nil, false
++}
++
++// PrivateKeyToPEM converts the private key to PEM format.
++// EC private keys are converted to PKCS#8 format.
++// RSA private keys are converted to PKCS#1 format.
++func PrivateKeyToPEM(privateKey interface{}, pwd []byte) ([]byte, error) {
++	// Validate inputs
++	if len(pwd) != 0 {
++		return PrivateKeyToEncryptedPEM(privateKey, pwd)
++	}
++	if privateKey == nil {
++		return nil, errors.New("Invalid key. It must be different from nil.")
++	}
++	k := privateKey.(*sm2.PrivateKey)
++	// get the oid for the curve
++	oidNamedCurve, ok := oidFromNamedCurve(k.Curve)
++	if !ok {
++		return nil, errors.New("unknown sm2 elliptic curve")
++	}
++
++	// based on https://golang.org/src/crypto/x509/sec1.go
++	privateKeyBytes := k.D.Bytes()
++	paddedPrivateKey := make([]byte, (k.Curve.Params().N.BitLen()+7)/8)
++	copy(paddedPrivateKey[len(paddedPrivateKey)-len(privateKeyBytes):], privateKeyBytes)
++	// omit NamedCurveOID for compatibility as it's optional
++	asn1Bytes, err := asn1.Marshal(ecPrivateKey{
++		Version:    1,
++		PrivateKey: paddedPrivateKey,
++		PublicKey:  asn1.BitString{Bytes: elliptic.Marshal(k.Curve, k.X, k.Y)},
++	})
++
++	if err != nil {
++		return nil, fmt.Errorf("error marshaling EC key to asn1 [%s]", err)
++	}
++
++	var pkcs8Key pkcs8Info
++	pkcs8Key.Version = 0
++	pkcs8Key.PrivateKeyAlgorithm = make([]asn1.ObjectIdentifier, 2)
++	pkcs8Key.PrivateKeyAlgorithm[0] = oidPublicKeySM2
++	pkcs8Key.PrivateKeyAlgorithm[1] = oidNamedCurve
++	pkcs8Key.PrivateKey = asn1Bytes
++
++	pkcs8Bytes, err := asn1.Marshal(pkcs8Key)
++	if err != nil {
++		return nil, fmt.Errorf("error marshaling sm2 EC key to asn1 [%s]", err)
++	}
++	return pem.EncodeToMemory(
++		&pem.Block{
++			Type:  "PRIVATE KEY",
++			Bytes: pkcs8Bytes,
++		},
++	), nil
++}
++
++// PrivateKeyToEncryptedPEM converts a private key to an encrypted PEM
++func PrivateKeyToEncryptedPEM(privateKey interface{}, pwd []byte) ([]byte, error) {
++	if privateKey == nil {
++		return nil, errors.New("Invalid private key. It must be different from nil.")
++	}
++
++	switch k := privateKey.(type) {
++	case *sm2.PrivateKey:
++		if k == nil {
++			return nil, errors.New("Invalid ecdsa private key. It must be different from nil.")
++		}
++		raw, err := x509.MarshalECPrivateKey(k)
++
++		if err != nil {
++			return nil, err
++		}
++
++		block, err := x509.EncryptPEMBlock(
++			rand.Reader,
++			"PRIVATE KEY",
++			raw,
++			pwd,
++			x509.PEMCipherAES256)
++
++		if err != nil {
++			return nil, err
++		}
++
++		return pem.EncodeToMemory(block), nil
++
++	default:
++		return nil, errors.New("Invalid key type. It must be *ecdsa.PrivateKey")
++	}
++}
++
++// DERToPrivateKey unmarshals a der to private key
++func DERToPrivateKey(der []byte) (key interface{}, err error) {
++
++	if key, err = x509.ParsePKCS1PrivateKey(der); err == nil {
++		return key, nil
++	}
++
++	if key, err = x509.ParsePKCS8PrivateKey(der); err == nil {
++		switch key.(type) {
++		case *sm2.PrivateKey:
++			return
++		case *ecdsa.PrivateKey:
++			return
++		case *rsa.PrivateKey:
++			return
++		default:
++			return nil, errors.New("Found unknown private key type in PKCS#8 wrapping")
++		}
++	}
++
++	if key, err = x509.ParseECPrivateKey(der); err == nil {
++		return
++	}
++
++	return nil, errors.New("Invalid key type. The DER must contain an rsa.PrivateKey or ecdsa.PrivateKey or sm.PrivateKey")
++}
++
++// PEMtoPrivateKey unmarshals a pem to private key
++func PEMtoPrivateKey(raw []byte, pwd []byte) (interface{}, error) {
++	if len(raw) == 0 {
++		return nil, errors.New("Invalid PEM. It must be different from nil.")
++	}
++	block, _ := pem.Decode(raw)
++	if block == nil {
++		return nil, fmt.Errorf("Failed decoding PEM. Block must be different from nil. [% x]", raw)
++	}
++
++	// TODO: derive from header the type of the key
++
++	if x509.IsEncryptedPEMBlock(block) {
++		if len(pwd) == 0 {
++			return nil, errors.New("Encrypted Key. Need a password")
++		}
++
++		decrypted, err := x509.DecryptPEMBlock(block, pwd)
++		if err != nil {
++			return nil, fmt.Errorf("Failed PEM decryption [%s]", err)
++		}
++
++		key, err := DERToPrivateKey(decrypted)
++		if err != nil {
++			return nil, err
++		}
++		return key, err
++	}
++
++	cert, err := DERToPrivateKey(block.Bytes)
++	if err != nil {
++		return nil, err
++	}
++	return cert, err
++}
++
++// PEMtoAES extracts from the PEM an AES key
++func PEMtoAES(raw []byte, pwd []byte) ([]byte, error) {
++	if len(raw) == 0 {
++		return nil, errors.New("Invalid PEM. It must be different from nil.")
++	}
++	block, _ := pem.Decode(raw)
++	if block == nil {
++		return nil, fmt.Errorf("Failed decoding PEM. Block must be different from nil. [% x]", raw)
++	}
++
++	if x509.IsEncryptedPEMBlock(block) {
++		if len(pwd) == 0 {
++			return nil, errors.New("Encrypted Key. Password must be different fom nil")
++		}
++
++		decrypted, err := x509.DecryptPEMBlock(block, pwd)
++		if err != nil {
++			return nil, fmt.Errorf("Failed PEM decryption. [%s]", err)
++		}
++		return decrypted, nil
++	}
++
++	return block.Bytes, nil
++}
++
++// AEStoPEM encapsulates an AES key in the PEM format
++func AEStoPEM(raw []byte) []byte {
++	return pem.EncodeToMemory(&pem.Block{Type: "AES PRIVATE KEY", Bytes: raw})
++}
++
++// AEStoEncryptedPEM encapsulates an AES key in the encrypted PEM format
++func AEStoEncryptedPEM(raw []byte, pwd []byte) ([]byte, error) {
++	if len(raw) == 0 {
++		return nil, errors.New("Invalid aes key. It must be different from nil")
++	}
++	if len(pwd) == 0 {
++		return AEStoPEM(raw), nil
++	}
++
++	block, err := x509.EncryptPEMBlock(
++		rand.Reader,
++		"AES PRIVATE KEY",
++		raw,
++		pwd,
++		x509.PEMCipherAES256)
++
++	if err != nil {
++		return nil, err
++	}
++
++	return pem.EncodeToMemory(block), nil
++}
++
++// PublicKeyToPEM marshals a public key to the pem format
++func PublicKeyToPEM(publicKey interface{}, pwd []byte) ([]byte, error) {
++	if len(pwd) != 0 {
++		return PublicKeyToEncryptedPEM(publicKey, pwd)
++	}
++
++	if publicKey == nil {
++		return nil, errors.New("Invalid public key. It must be different from nil.")
++	}
++
++	switch k := publicKey.(type) {
++	case *ecdsa.PublicKey:
++		if k == nil {
++			return nil, errors.New("Invalid ecdsa public key. It must be different from nil.")
++		}
++		PubASN1, err := x509.MarshalPKIXPublicKey(k)
++		if err != nil {
++			return nil, err
++		}
++
++		return pem.EncodeToMemory(
++			&pem.Block{
++				Type:  "PUBLIC KEY",
++				Bytes: PubASN1,
++			},
++		), nil
++	case *rsa.PublicKey:
++		if k == nil {
++			return nil, errors.New("Invalid rsa public key. It must be different from nil.")
++		}
++		PubASN1, err := x509.MarshalPKIXPublicKey(k)
++		if err != nil {
++			return nil, err
++		}
++
++		return pem.EncodeToMemory(
++			&pem.Block{
++				Type:  "RSA PUBLIC KEY",
++				Bytes: PubASN1,
++			},
++		), nil
++	case *sm2.PublicKey:
++		if k == nil {
++			return nil, errors.New("Invalid sm2 public key. It must be different from nil.")
++		}
++		PubASN1, err := x509.MarshalPKIXPublicKey(k)
++		if err != nil {
++			return nil, err
++		}
++
++		return pem.EncodeToMemory(
++			&pem.Block{
++				Type:  "PUBLIC KEY",
++				Bytes: PubASN1,
++			},
++		), nil
++	default:
++		return nil, errors.New("Invalid key type. It must be *sm2.PublicKey")
++	}
++}
++
++// PublicKeyToEncryptedPEM converts a public key to encrypted pem
++func PublicKeyToEncryptedPEM(publicKey interface{}, pwd []byte) ([]byte, error) {
++	if publicKey == nil {
++		return nil, errors.New("Invalid public key. It must be different from nil.")
++	}
++	if len(pwd) == 0 {
++		return nil, errors.New("Invalid password. It must be different from nil.")
++	}
++
++	switch k := publicKey.(type) {
++	case *sm2.PublicKey:
++		if k == nil {
++			return nil, errors.New("Invalid sm2 public key. It must be different from nil.")
++		}
++		raw, err := x509.MarshalPKIXPublicKey(k)
++		if err != nil {
++			return nil, err
++		}
++
++		block, err := x509.EncryptPEMBlock(
++			rand.Reader,
++			"PUBLIC KEY",
++			raw,
++			pwd,
++			x509.PEMCipherAES256)
++
++		if err != nil {
++			return nil, err
++		}
++
++		return pem.EncodeToMemory(block), nil
++
++	default:
++		return nil, errors.New("Invalid key type. It must be *sm2.PublicKey")
++	}
++}
++
++// PEMtoPublicKey unmarshals a pem to public key
++func PEMtoPublicKey(raw []byte, pwd []byte) (interface{}, error) {
++	if len(raw) == 0 {
++		return nil, errors.New("Invalid PEM. It must be different from nil.")
++	}
++	block, _ := pem.Decode(raw)
++	if block == nil {
++		return nil, fmt.Errorf("Failed decoding. Block must be different from nil. [% x]", raw)
++	}
++
++	// TODO: derive from header the type of the key
++	if x509.IsEncryptedPEMBlock(block) {
++		if len(pwd) == 0 {
++			return nil, errors.New("Encrypted Key. Password must be different from nil")
++		}
++
++		decrypted, err := x509.DecryptPEMBlock(block, pwd)
++		if err != nil {
++			return nil, fmt.Errorf("Failed PEM decryption. [%s]", err)
++		}
++
++		key, err := DERToPublicKey(decrypted)
++		if err != nil {
++			return nil, err
++		}
++		return key, err
++	}
++
++	cert, err := DERToPublicKey(block.Bytes)
++	if err != nil {
++		return nil, err
++	}
++	return cert, err
++}
++
++// DERToPublicKey unmarshals a der to public key
++func DERToPublicKey(raw []byte) (pub interface{}, err error) {
++	if len(raw) == 0 {
++		return nil, errors.New("Invalid DER. It must be different from nil.")
++	}
++
++	key, err := x509.ParsePKIXPublicKey(raw)
++
++	return key, err
++}
+diff --git a/internal/github.com/hyperledger/fabric/bccsp/gm/sm2.go b/internal/github.com/hyperledger/fabric/bccsp/gm/sm2.go
+new file mode 100644
+index 00000000..e6018ecd
+--- /dev/null
++++ b/internal/github.com/hyperledger/fabric/bccsp/gm/sm2.go
+@@ -0,0 +1,78 @@
++/*
++Copyright IBM Corp. 2016 All Rights Reserved.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++		SPDX-License-Identifier: Apache-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++package gm
++
++import (
++	"crypto/rand"
++	"encoding/asn1"
++	"errors"
++	"fmt"
++	"math/big"
++
++	sm "github.com/swordboy/crypto/sm/sm2"
++
++	"github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric/bccsp"
++)
++
++type SM2Signature struct {
++	R, S *big.Int
++}
++
++func MarshalSM2Signature(r, s *big.Int) ([]byte, error) {
++	return asn1.Marshal(SM2Signature{r, s})
++}
++
++func UnmarshalSM2Signature(raw []byte) (*big.Int, *big.Int, error) {
++	// Unmarshal
++	sig := new(SM2Signature)
++	_, err := asn1.Unmarshal(raw, sig)
++	if err != nil {
++		return nil, nil, fmt.Errorf("Failed unmashalling signature [%s]", err)
++	}
++
++	// Validate sig
++	if sig.R == nil {
++		return nil, nil, errors.New("Invalid signature. R must be different from nil.")
++	}
++	if sig.S == nil {
++		return nil, nil, errors.New("Invalid signature. S must be different from nil.")
++	}
++
++	if sig.R.Sign() != 1 {
++		return nil, nil, errors.New("Invalid signature. R must be larger than zero")
++	}
++	if sig.S.Sign() != 1 {
++		return nil, nil, errors.New("Invalid signature. S must be larger than zero")
++	}
++
++	return sig.R, sig.S, nil
++}
++
++func signSM2(k *sm.PrivateKey, digest []byte, opts bccsp.SignerOpts) (signature []byte, err error) {
++	r, s, err := sm.Sign(rand.Reader, k, digest)
++	if err != nil {
++		return nil, err
++	}
++	return MarshalSM2Signature(r, s)
++}
++
++func verifySM2(k *sm.PublicKey, signature, digest []byte, opts bccsp.SignerOpts) (valid bool, err error) {
++	r, s, err := UnmarshalSM2Signature(signature)
++	if err != nil {
++		return false, fmt.Errorf("Failed unmashalling signature [%s]", err)
++	}
++	return sm.Verify(k, digest, r, s), nil
++}
+diff --git a/internal/github.com/hyperledger/fabric/bccsp/gm/sm2key.go b/internal/github.com/hyperledger/fabric/bccsp/gm/sm2key.go
+new file mode 100644
+index 00000000..59c6e9c5
+--- /dev/null
++++ b/internal/github.com/hyperledger/fabric/bccsp/gm/sm2key.go
+@@ -0,0 +1,119 @@
++/*
++Copyright CETCS. 2017 All Rights Reserved.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++	SPDX-License-Identifier: Apache-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++package gm
++
++import (
++	"fmt"
++
++	sm "github.com/swordboy/crypto/sm/sm2"
++	"github.com/swordboy/crypto/x509"
++
++	"crypto/sha256"
++
++	"crypto/elliptic"
++
++	"github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric/bccsp"
++)
++
++type sm2PrivateKey struct {
++	privKey *sm.PrivateKey
++}
++
++// Bytes converts this key to its byte representation,
++// if this operation is allowed.
++func (k *sm2PrivateKey) Bytes() (raw []byte, err error) {
++	return x509.MarshalECPrivateKey(k.privKey)
++}
++
++// SKI returns the subject key identifier of this key.
++func (k *sm2PrivateKey) SKI() (ski []byte) {
++	if k.privKey == nil {
++		return nil
++	}
++
++	// Marshall the public key
++	raw := elliptic.Marshal(k.privKey.Curve, k.privKey.PublicKey.X, k.privKey.PublicKey.Y)
++
++	// Hash it
++	hash := sha256.New()
++	hash.Write(raw)
++	return hash.Sum(nil)
++}
++
++// Symmetric returns true if this key is a symmetric key,
++// false if this key is asymmetric
++func (k *sm2PrivateKey) Symmetric() bool {
++	return false
++}
++
++// Private returns true if this key is a private key,
++// false otherwise.
++func (k *sm2PrivateKey) Private() bool {
++	return true
++}
++
++// PublicKey returns the corresponding public key part of an asymmetric public/private key pair.
++// This method returns an error in symmetric key schemes.
++func (k *sm2PrivateKey) PublicKey() (bccsp.Key, error) {
++	return &sm2PublicKey{&k.privKey.PublicKey}, nil
++}
++
++type sm2PublicKey struct {
++	pubKey *sm.PublicKey
++}
++
++// Bytes converts this key to its byte representation,
++// if this operation is allowed.
++func (k *sm2PublicKey) Bytes() (raw []byte, err error) {
++	raw, err = x509.MarshalPKIXPublicKey(k.pubKey)
++	if err != nil {
++		return nil, fmt.Errorf("Failed marshalling key [%s]", err)
++	}
++	return
++}
++
++// SKI returns the subject key identifier of this key.
++func (k *sm2PublicKey) SKI() (ski []byte) {
++	if k.pubKey == nil {
++		return nil
++	}
++
++	// Marshall the public key
++	raw := elliptic.Marshal(k.pubKey.Curve, k.pubKey.X, k.pubKey.Y)
++
++	// Hash it
++	hash := sha256.New()
++	hash.Write(raw)
++	return hash.Sum(nil)
++}
++
++// Symmetric returns true if this key is a symmetric key,
++// false if this key is asymmetric
++func (k *sm2PublicKey) Symmetric() bool {
++	return false
++}
++
++// Private returns true if this key is a private key,
++// false otherwise.
++func (k *sm2PublicKey) Private() bool {
++	return false
++}
++
++// PublicKey returns the corresponding public key part of an asymmetric public/private key pair.
++// This method returns an error in symmetric key schemes.
++func (k *sm2PublicKey) PublicKey() (bccsp.Key, error) {
++	return k, nil
++}
+\ No newline at end of file
+diff --git a/internal/github.com/hyperledger/fabric/bccsp/gm/sm3sig.go b/internal/github.com/hyperledger/fabric/bccsp/gm/sm3sig.go
+new file mode 100644
+index 00000000..75ef47cf
+--- /dev/null
++++ b/internal/github.com/hyperledger/fabric/bccsp/gm/sm3sig.go
+@@ -0,0 +1,51 @@
++/*
++Copyright CETCS. 2017 All Rights Reserved.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++	SPDX-License-Identifier: Apache-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++package gm
++
++import "hash"
++
++type sm3sig struct {
++	msg []byte
++}
++
++func NewSM3Sig() hash.Hash {
++	return &sm3sig{}
++}
++
++func (d *sm3sig) Write(p []byte) (n int, err error) {
++	d.msg = append(d.msg, p...)
++	return len(d.msg), nil
++}
++
++func (d *sm3sig) Sum(b []byte) []byte {
++	if b != nil {
++		panic("sm3sig fail: b must be nil")
++	}
++
++	return d.msg
++}
++
++func (d *sm3sig) Reset() {
++	d.msg = d.msg[:0]
++}
++
++func (d *sm3sig) Size() int {
++	return 0
++}
++
++func (d *sm3sig) BlockSize() int {
++	return 0
++}
+\ No newline at end of file
+diff --git a/internal/github.com/hyperledger/fabric/bccsp/hashopts.go b/internal/github.com/hyperledger/fabric/bccsp/hashopts.go
+index 6209feca..fa79bc36 100644
+--- a/internal/github.com/hyperledger/fabric/bccsp/hashopts.go
++++ b/internal/github.com/hyperledger/fabric/bccsp/hashopts.go
+@@ -13,6 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+ */
++
+ /*
+ Notice: This file has been modified for Hyperledger Fabric SDK Go usage.
+ Please review third_party pinning scripts and patches for more details.
+@@ -69,6 +70,10 @@ func GetHashOpt(hashFunction string) (HashOpts, error) {
+ 		return &SHA3_256Opts{}, nil
+ 	case SHA3_384:
+ 		return &SHA3_384Opts{}, nil
++	case SM3:
++		return &SM3Opts{}, nil
++	case SM3SIG:
++		return &SM3SIGOpts{}, nil
+ 	}
+ 	return nil, fmt.Errorf("hash function not recognized [%s]", hashFunction)
+ }
+diff --git a/internal/github.com/hyperledger/fabric/bccsp/sm2opts.go b/internal/github.com/hyperledger/fabric/bccsp/sm2opts.go
+new file mode 100644
+index 00000000..b09e9544
+--- /dev/null
++++ b/internal/github.com/hyperledger/fabric/bccsp/sm2opts.go
+@@ -0,0 +1,131 @@
++/*
++Copyright IBM Corp. 2016 All Rights Reserved.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++	SPDX-License-Identifier: Apache-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++package bccsp
++
++const (
++	SM2 = "SM2"
++	SM3 = "SM3"
++	//This is used for indicating hashopts while doing sm3 before sm2 signature
++	// through which hash will actually do nothing
++	SM3SIG = "SM3SIG"
++	// SM2ReRand SM2 key re-randomization
++	SM2ReRand = "SM2"
++)
++
++// SHA256Opts contains options relating to SHA-256.
++type SM3Opts struct {
++}
++
++// Algorithm returns the hash algorithm identifier (to be used).
++func (opts *SM3Opts) Algorithm() string {
++	return SM3
++}
++
++// SHA256Opts contains options relating to SHA-256.
++type SM3SIGOpts struct {
++}
++
++// Algorithm returns the hash algorithm identifier (to be used).
++func (opts *SM3SIGOpts) Algorithm() string {
++	return SM3SIG
++}
++
++// SM2KeyGenOpts contains options for SM2 key generation.
++type SM2KeyGenOpts struct {
++	Temporary bool
++}
++
++// Algorithm returns the key generation algorithm identifier (to be used).
++func (opts *SM2KeyGenOpts) Algorithm() string {
++	return SM2
++}
++
++// Ephemeral returns true if the key to generate has to be ephemeral,
++// false otherwise.
++func (opts *SM2KeyGenOpts) Ephemeral() bool {
++	return opts.Temporary
++}
++
++// SM2PKIXPublicKeyImportOpts contains options for SM2 public key importation in PKIX format
++type SM2PKIXPublicKeyImportOpts struct {
++	Temporary bool
++}
++
++// Algorithm returns the key importation algorithm identifier (to be used).
++func (opts *SM2PKIXPublicKeyImportOpts) Algorithm() string {
++	return SM2
++}
++
++// Ephemeral returns true if the key to generate has to be ephemeral,
++// false otherwise.
++func (opts *SM2PKIXPublicKeyImportOpts) Ephemeral() bool {
++	return opts.Temporary
++}
++
++// SM2PrivateKeyImportOpts contains options for SM2 secret key importation in DER format
++// or PKCS#8 format.
++type SM2PrivateKeyImportOpts struct {
++	Temporary bool
++}
++
++// Algorithm returns the key importation algorithm identifier (to be used).
++func (opts *SM2PrivateKeyImportOpts) Algorithm() string {
++	return SM2
++}
++
++// Ephemeral returns true if the key to generate has to be ephemeral,
++// false otherwise.
++func (opts *SM2PrivateKeyImportOpts) Ephemeral() bool {
++	return opts.Temporary
++}
++
++// SM2GoPublicKeyImportOpts contains options for SM2 key importation from ecdsa.PublicKey
++type SM2GoPublicKeyImportOpts struct {
++	Temporary bool
++}
++
++// Algorithm returns the key importation algorithm identifier (to be used).
++func (opts *SM2GoPublicKeyImportOpts) Algorithm() string {
++	return SM2
++}
++
++// Ephemeral returns true if the key to generate has to be ephemeral,
++// false otherwise.
++func (opts *SM2GoPublicKeyImportOpts) Ephemeral() bool {
++	return opts.Temporary
++}
++
++// SM2ReRandKeyOpts contains options for SM2 key re-randomization.
++type SM2ReRandKeyOpts struct {
++	Temporary bool
++	Expansion []byte
++}
++
++// Algorithm returns the key derivation algorithm identifier (to be used).
++func (opts *SM2ReRandKeyOpts) Algorithm() string {
++	return SM2ReRand
++}
++
++// Ephemeral returns true if the key to generate has to be ephemeral,
++// false otherwise.
++func (opts *SM2ReRandKeyOpts) Ephemeral() bool {
++	return opts.Temporary
++}
++
++// ExpansionValue returns the re-randomization factor
++func (opts *SM2ReRandKeyOpts) ExpansionValue() []byte {
++	return opts.Expansion
++}
+diff --git a/internal/github.com/hyperledger/fabric/bccsp/utils/keys.go b/internal/github.com/hyperledger/fabric/bccsp/utils/keys.go
+index f6c308bd..2b9e9f19 100644
+--- a/internal/github.com/hyperledger/fabric/bccsp/utils/keys.go
++++ b/internal/github.com/hyperledger/fabric/bccsp/utils/keys.go
+@@ -26,11 +26,12 @@ import (
+ 	"crypto/elliptic"
+ 	"crypto/rand"
+ 	"crypto/rsa"
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"encoding/asn1"
+ 	"encoding/pem"
+ 	"errors"
+ 	"fmt"
++	"github.com/swordboy/crypto/sm/sm2"
+ )
+ 
+ // struct to hold info required for PKCS#8
+@@ -86,6 +87,14 @@ func RsaPrivateKeyToDER(privateKey *rsa.PrivateKey) ([]byte, error) {
+ 	return x509.MarshalPKCS1PrivateKey(privateKey), nil
+ }
+ 
++func SM2PrivateKeyToDER(priv *sm2.PrivateKey) ([]byte, error) {
++	if priv == nil {
++		return nil, errors.New("Invalid sm2 private key. It must be different from nil.")
++	}
++
++	return x509.MarshalECPrivateKey(priv)
++}
++
+ // PrivateKeyToPEM converts the private key to PEM format.
+ // EC private keys are converted to PKCS#8 format.
+ // RSA private keys are converted to PKCS#1 format.
+@@ -205,6 +214,8 @@ func DERToPrivateKey(der []byte) (key interface{}, err error) {
+ 		switch key.(type) {
+ 		case *rsa.PrivateKey, *ecdsa.PrivateKey:
+ 			return
++		case *sm2.PrivateKey:
++			return
+ 		default:
+ 			return nil, errors.New("Found unknown private key type in PKCS#8 wrapping")
+ 		}
+@@ -226,7 +237,6 @@ func PEMtoPrivateKey(raw []byte, pwd []byte) (interface{}, error) {
+ 	if block == nil {
+ 		return nil, fmt.Errorf("Failed decoding PEM. Block must be different from nil. [% x]", raw)
+ 	}
+-
+ 	// TODO: derive from header the type of the key
+ 
+ 	if x509.IsEncryptedPEMBlock(block) {
+diff --git a/internal/github.com/hyperledger/fabric/bccsp/utils/x509.go b/internal/github.com/hyperledger/fabric/bccsp/utils/x509.go
+index e8e0ca9a..42cb3f10 100644
+--- a/internal/github.com/hyperledger/fabric/bccsp/utils/x509.go
++++ b/internal/github.com/hyperledger/fabric/bccsp/utils/x509.go
+@@ -13,6 +13,7 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+ */
++
+ /*
+ Notice: This file has been modified for Hyperledger Fabric SDK Go usage.
+ Please review third_party pinning scripts and patches for more details.
+@@ -21,10 +22,15 @@ Please review third_party pinning scripts and patches for more details.
+ package utils
+ 
+ import (
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
++	originalX509 "crypto/x509"
+ )
+ 
+ // DERToX509Certificate converts der to x509
+ func DERToX509Certificate(asn1Data []byte) (*x509.Certificate, error) {
+ 	return x509.ParseCertificate(asn1Data)
+ }
++
++func DERToOriginalX509Certificate(asn1Data []byte) (*originalX509.Certificate, error) {
++	return originalX509.ParseCertificate(asn1Data)
++}
+diff --git a/internal/github.com/hyperledger/fabric/common/attrmgr/attrmgr.go b/internal/github.com/hyperledger/fabric/common/attrmgr/attrmgr.go
+index f993a650..aead8a63 100644
+--- a/internal/github.com/hyperledger/fabric/common/attrmgr/attrmgr.go
++++ b/internal/github.com/hyperledger/fabric/common/attrmgr/attrmgr.go
+@@ -26,7 +26,7 @@ Please review third_party pinning scripts and patches for more details.
+ package attrmgr
+ 
+ import (
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"crypto/x509/pkix"
+ 	"encoding/asn1"
+ 	"encoding/json"
+diff --git a/internal/github.com/hyperledger/fabric/msp/cert.go b/internal/github.com/hyperledger/fabric/msp/cert.go
+index 4a6700d2..7ee3046c 100644
+--- a/internal/github.com/hyperledger/fabric/msp/cert.go
++++ b/internal/github.com/hyperledger/fabric/msp/cert.go
+@@ -23,7 +23,7 @@ package msp
+ import (
+ 	"bytes"
+ 	"crypto/ecdsa"
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"crypto/x509/pkix"
+ 	"encoding/asn1"
+ 	"encoding/pem"
+diff --git a/internal/github.com/hyperledger/fabric/msp/identities.go b/internal/github.com/hyperledger/fabric/msp/identities.go
+index 0690d902..8921c8c2 100644
+--- a/internal/github.com/hyperledger/fabric/msp/identities.go
++++ b/internal/github.com/hyperledger/fabric/msp/identities.go
+@@ -3,6 +3,7 @@ Copyright IBM Corp. All Rights Reserved.
+ 
+ SPDX-License-Identifier: Apache-2.0
+ */
++
+ /*
+ Notice: This file has been modified for Hyperledger Fabric SDK Go usage.
+ Please review third_party pinning scripts and patches for more details.
+@@ -13,7 +14,7 @@ package msp
+ import (
+ 	"crypto"
+ 	"crypto/rand"
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"encoding/hex"
+ 
+ 	"github.com/hyperledger/fabric-sdk-go/pkg/common/providers/core"
+@@ -137,7 +138,16 @@ func (id *identity) Verify(msg []byte, sig []byte) error {
+ 	// mspIdentityLogger.Infof("Verifying signature")
+ 
+ 	// Compute Hash
+-	hashOpt, err := id.getHashOpt(id.msp.cryptoConfig.SignatureHashFamily)
++	var hashFamily string
++	switch id.cert.PublicKeyAlgorithm {
++	case x509.ECDSA:
++		hashFamily = id.msp.cryptoConfig.SignatureHashFamily
++	case x509.SM2: //We here verify the msg instead of the digest of msg
++		hashFamily = bccsp.SM3
++	default:
++		hashFamily = id.msp.cryptoConfig.SignatureHashFamily
++	}
++	hashOpt, err := id.getHashOpt(hashFamily)
+ 	if err != nil {
+ 		return errors.WithMessage(err, "failed getting hash function options")
+ 	}
+@@ -188,6 +198,10 @@ func (id *identity) getHashOpt(hashFamily string) (core.HashOpts, error) {
+ 		return bccsp.GetHashOpt(bccsp.SHA256)
+ 	case bccsp.SHA3:
+ 		return bccsp.GetHashOpt(bccsp.SHA3_256)
++	case bccsp.SM3:
++		return bccsp.GetHashOpt(bccsp.SM3)
++	case bccsp.SM3SIG:
++		return bccsp.GetHashOpt(bccsp.SM3SIG)
+ 	}
+ 	return nil, errors.Errorf("hash familiy not recognized [%s]", hashFamily)
+ }
+@@ -214,7 +228,16 @@ func (id *signingidentity) Sign(msg []byte) ([]byte, error) {
+ 	//mspIdentityLogger.Infof("Signing message")
+ 
+ 	// Compute Hash
+-	hashOpt, err := id.getHashOpt(id.msp.cryptoConfig.SignatureHashFamily)
++	var hashFamily string
++	switch id.cert.PublicKeyAlgorithm {
++	case x509.ECDSA:
++		hashFamily = id.msp.cryptoConfig.SignatureHashFamily
++	case x509.SM2: //We here verify the msg instead of the digest of msg
++		hashFamily = bccsp.SM3
++	default:
++		hashFamily = id.msp.cryptoConfig.SignatureHashFamily
++	}
++	hashOpt, err := id.getHashOpt(hashFamily)
+ 	if err != nil {
+ 		return nil, errors.WithMessage(err, "failed getting hash function options")
+ 	}
+diff --git a/internal/github.com/hyperledger/fabric/msp/mspimpl.go b/internal/github.com/hyperledger/fabric/msp/mspimpl.go
+index 27b00126..0e9916d8 100644
+--- a/internal/github.com/hyperledger/fabric/msp/mspimpl.go
++++ b/internal/github.com/hyperledger/fabric/msp/mspimpl.go
+@@ -12,7 +12,7 @@ package msp
+ 
+ import (
+ 	"bytes"
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"crypto/x509/pkix"
+ 	"encoding/hex"
+ 	"encoding/pem"
+diff --git a/internal/github.com/hyperledger/fabric/msp/mspimplsetup.go b/internal/github.com/hyperledger/fabric/msp/mspimplsetup.go
+index 948d0373..b153d88f 100644
+--- a/internal/github.com/hyperledger/fabric/msp/mspimplsetup.go
++++ b/internal/github.com/hyperledger/fabric/msp/mspimplsetup.go
+@@ -12,7 +12,7 @@ package msp
+ 
+ import (
+ 	"bytes"
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"crypto/x509/pkix"
+ 	"fmt"
+ 	"time"
+diff --git a/internal/github.com/hyperledger/fabric/msp/mspimplvalidate.go b/internal/github.com/hyperledger/fabric/msp/mspimplvalidate.go
+index f49d514d..b2d5547d 100644
+--- a/internal/github.com/hyperledger/fabric/msp/mspimplvalidate.go
++++ b/internal/github.com/hyperledger/fabric/msp/mspimplvalidate.go
+@@ -12,7 +12,7 @@ package msp
+ 
+ import (
+ 	"bytes"
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"crypto/x509/pkix"
+ 	"encoding/asn1"
+ 	"math/big"
+diff --git a/internal/github.com/hyperledger/fabric/sdkpatch/cryptosuitebridge/cryptosuitebridge.go b/internal/github.com/hyperledger/fabric/sdkpatch/cryptosuitebridge/cryptosuitebridge.go
+index 04ec4cf7..1cf701d6 100644
+--- a/internal/github.com/hyperledger/fabric/sdkpatch/cryptosuitebridge/cryptosuitebridge.go
++++ b/internal/github.com/hyperledger/fabric/sdkpatch/cryptosuitebridge/cryptosuitebridge.go
+@@ -3,6 +3,7 @@ Copyright SecureKey Technologies Inc. All Rights Reserved.
+ 
+ SPDX-License-Identifier: Apache-2.0
+ */
++
+ /*
+ Notice: This file has been modified for Hyperledger Fabric SDK Go usage.
+ Please review third_party pinning scripts and patches for more details.
+@@ -45,6 +46,8 @@ const (
+ 	SHA3_256         = bccsp.SHA3_256
+ 	SHA3_384         = bccsp.SHA3_384
+ 	X509Certificate  = bccsp.X509Certificate
++	SM3              = bccsp.SM3
++	SM3SIG           = bccsp.SM3SIG
+ )
+ 
+ // NewCspSigner is a bridge for bccsp signer.New call
+diff --git a/network_config.yaml b/network_config.yaml
+new file mode 100644
+index 00000000..4e7f1622
+--- /dev/null
++++ b/network_config.yaml
+@@ -0,0 +1,156 @@
++name: "example"
++
++x-type: "hlfv1"
++
++description: "example network config"
++
++version: "1.0"
++
++client:
++  organization: Org1
++
++  logging:
++    level: info
++
++  eventService:
++    type: deliver
++  cryptoconfig:
++    path: ./crypto-config
++
++  BCCSP:
++    security:
++     enabled: true
++     default:
++       provider: "SW"
++
++     hashAlgorithm: "SM3"
++
++     softVerify: true
++     ephemeral: false
++     level: 256
++
++  credentialStore:
++      path: "./credentialStore/fabric-client-kv-org1"
++
++      cryptoStore:
++        path: "./cryptoStore/fabric-client-kv-org1"
++
++      wallet: wallet-name
++
++channels:
++
++    
++  mychannel:
++
++    peers:
++        
++      peer0.org1.example.com:
++        endorsingPeer: true
++        chaincodeQuery: true
++        ledgerQuery: true
++        eventSource: true
++      peer1.org1.example.com:
++        endorsingPeer: true
++        chaincodeQuery: true
++        ledgerQuery: true
++        eventSource: true
++    chaincodes:
++        
++    
++
++organizations:
++
++  Org1:
++    mspid: Org1MSP
++    cryptoPath: peerOrganizations/org1.example.com/users/{userName}@org1.example.com/msp
++    peers:
++    
++      - peer0.org1.example.com
++      - peer1.org1.example.com
++
++    certificateAuthorities:
++      - tlsca.org1.example.com
++    
++    adminPrivateKey:
++      path: ./crypto-config/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp/keystore/5ada409004f9d7ab31e379e2e4d0c455a0f5e3c7c6bf938ea94de309ccff1873_sk
++    signedCert:
++      path: ./crypto-config/peerOrganizations/org1.example.com/users/Admin@org1.example.com/msp/signcerts/Admin@org1.example.com-cert.pem
++
++  OrdererOrg:
++    mspID: OrdererMSP
++    cryptoPath: ordererOrganizations/example.com/users/{userName}@example.com/msp
++
++orderers:
++
++  orderer.example.com:
++    url: grpcs://192.168.1.27:7050
++    grpcOptions:
++      ssl-target-name-override: orderer.example.com
++    tlsCACerts:
++      path: ./crypto-config/ordererOrganizations/example.com/orderers/orderer.example.com/tls/ca.crt
++
++
++
++peers:
++
++    
++  peer0.org1.example.com:
++    url: grpcs://192.168.1.27:7051
++    eventUrl: grpcs://192.168.1.27:7053
++    grpcOptions:
++      ssl-target-name-override: peer0.org1.example.com
++    tlsCACerts:
++      path: ./crypto-config/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt
++
++  peer1.org1.example.com:
++    url: grpcs://192.168.1.27:8051
++    eventUrl: grpcs://192.168.1.27:8053
++    grpcOptions:
++      ssl-target-name-override: peer1.org1.example.com
++    tlsCACerts:
++      path: ./crypto-config/peerOrganizations/org1.example.com/peers/peer1.org1.example.com/tls/ca.crt
++
++
++certificateAuthorities:
++  tlsca.org1.example.com:
++    url: https://tlsca.org1.example.com:7054
++    httpOptions:
++      verify: false
++    tlsCACerts:
++      path: ./crypto-config/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls/ca.crt
++    registrar:
++      enrollId: admin
++      enrollSecret: adminpw
++    caName: ca.org1
++
++
++
++entityMatchers:
++  peer:
++    - pattern: peer0.org1.example.com:(\d+)
++      urlSubstitutionExp: 192.168.1.27:7051
++      sslTargetOverrideUrlSubstitutionExp: peer0.org1.example.com
++      mappedHost: peer0.org1.example.com
++    - pattern: peer1.org1.example.com:(\d+)
++      urlSubstitutionExp: 192.168.1.27:8051
++      sslTargetOverrideUrlSubstitutionExp: peer1.org1.example.com
++      mappedHost: peer1.org1.example.com
++
++  orderer:
++
++    - pattern: orderer.example.com:7050
++      urlSubstitutionExp: 192.168.1.27:7050
++      sslTargetOverrideUrlSubstitutionExp: orderer.example.com
++      mappedHost: orderer.example.com
++
++  certificateAuthority:
++
++    
++         
++    - pattern: tlsca.org1.example.com:7054
++      urlSubstitutionExp: 192.168.1.27:7054
++      mappedHost: tlsca.org1.example.com
++         
++    
++
++
+diff --git a/pkg/client/common/verifier/signature.go b/pkg/client/common/verifier/signature.go
+index 66849afe..0bf73795 100644
+--- a/pkg/client/common/verifier/signature.go
++++ b/pkg/client/common/verifier/signature.go
+@@ -8,7 +8,7 @@ SPDX-License-Identifier: Apache-2.0
+ package verifier
+ 
+ import (
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"time"
+ 
+ 	"github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric/bccsp/utils"
+@@ -17,6 +17,8 @@ import (
+ 	"github.com/hyperledger/fabric-sdk-go/pkg/common/providers/fab"
+ 	"github.com/hyperledger/fabric-sdk-go/third_party/github.com/hyperledger/fabric/protos/common"
+ 	"github.com/pkg/errors"
++	originalX509 "crypto/x509"
++	"runtime/debug"
+ )
+ 
+ const loggerModule = "fabsdk/client"
+@@ -53,6 +55,7 @@ func (v *Signature) Verify(response *fab.TransactionProposalResponse) error {
+ 	// validate the signature
+ 	err = v.Membership.Verify(creatorID, digest, res.GetEndorsement().Signature)
+ 	if err != nil {
++		debug.PrintStack()
+ 		return errors.WithStack(status.New(status.EndorserClientStatus, status.SignatureVerificationFailed.ToInt32(), "the creator's signature over the proposal is not valid", []interface{}{err.Error()}))
+ 	}
+ 
+@@ -79,6 +82,20 @@ func ValidateCertificateDates(cert *x509.Certificate) error {
+ 	return nil
+ }
+ 
++func ValidateOriginalCertificateDates(cert *originalX509.Certificate) error {
++	if cert == nil {
++		return nil
++	}
++	if time.Now().UTC().Before(cert.NotBefore) {
++		return errors.New("Certificate provided is not valid until later date")
++	}
++
++	if time.Now().UTC().After(cert.NotAfter) {
++		return errors.New("Certificate provided has expired")
++	}
++	return nil
++}
++
+ //VerifyPeerCertificate verifies raw certs and chain certs for expiry and not yet valid dates
+ func VerifyPeerCertificate(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+ 	for _, chaincert := range rawCerts {
+@@ -107,3 +124,31 @@ func VerifyPeerCertificate(rawCerts [][]byte, verifiedChains [][]*x509.Certifica
+ 	}
+ 	return nil
+ }
++
++func VerifyOriginalPeerCertificate(rawCerts [][]byte, verifiedChains [][]*originalX509.Certificate) error {
++	for _, chaincert := range rawCerts {
++		cert, err := utils.DERToOriginalX509Certificate(chaincert)
++		if err != nil {
++			logger.Warn("Got error while verifying cert")
++		}
++		if cert != nil {
++			err = ValidateOriginalCertificateDates(cert)
++			if err != nil {
++				//cert is expired or not valid
++				logger.Warn(err.Error())
++				return err
++			}
++		}
++	}
++	for _, certs := range verifiedChains {
++		for _, cert := range certs {
++			err := ValidateOriginalCertificateDates(cert)
++			if err != nil {
++				//cert is expired or not valid
++				logger.Warn(err.Error())
++				return err
++			}
++		}
++	}
++	return nil
++}
+diff --git a/pkg/client/msp/client.go b/pkg/client/msp/client.go
+index d4717435..6d11118a 100644
+--- a/pkg/client/msp/client.go
++++ b/pkg/client/msp/client.go
+@@ -117,6 +117,8 @@ type enrollmentOptions struct {
+ 	label    string
+ 	typ      string
+ 	attrReqs []*AttributeRequest
++	keyAlgo  string
++	keySize  int
+ }
+ 
+ // EnrollmentOption describes a functional parameter for Enroll
+@@ -130,6 +132,20 @@ func WithSecret(secret string) EnrollmentOption {
+ 	}
+ }
+ 
++func WithKeyAlgo(keyAlgo string) EnrollmentOption {
++	return func(o *enrollmentOptions) error {
++		o.keyAlgo = keyAlgo
++		return nil
++	}
++}
++
++func WithKeySize(keySize int) EnrollmentOption {
++	return func(o *enrollmentOptions) error {
++		o.keySize = keySize
++		return nil
++	}
++}
++
+ // WithProfile enrollment option
+ func WithProfile(profile string) EnrollmentOption {
+ 	return func(o *enrollmentOptions) error {
+@@ -326,12 +342,12 @@ func getIdentityResponse(response *mspapi.IdentityResponse) *IdentityResponse {
+ 	}
+ 
+ 	res := &IdentityResponse{ID: response.ID,
+-		Affiliation:    response.Affiliation,
+-		Type:           response.Type,
+-		Attributes:     attributes,
++		Affiliation: response.Affiliation,
++		Type: response.Type,
++		Attributes: attributes,
+ 		MaxEnrollments: response.MaxEnrollments,
+-		Secret:         response.Secret,
+-		CAName:         response.CAName,
++		Secret: response.Secret,
++		CAName: response.CAName,
+ 	}
+ 
+ 	return res
+@@ -379,6 +395,16 @@ func (c *Client) Enroll(enrollmentID string, opts ...EnrollmentOption) error {
+ 		Type:    eo.typ,
+ 		Label:   eo.label,
+ 	}
++	if eo.keyAlgo != "" {
++		req.CSR = new(mspapi.CSRRequest)
++		req.CSR.KeyRequest=new(mspapi.KeyRequest)
++		req.CSR.KeyRequest.Algorithm = eo.keyAlgo
++		if eo.keySize != 0 {
++			req.CSR.KeyRequest.Size = eo.keySize
++		} else {
++			req.CSR.KeyRequest.Size = 256
++		}
++	}
+ 
+ 	if len(eo.attrReqs) > 0 {
+ 		attrs := make([]*mspapi.AttributeRequest, 0)
+diff --git a/pkg/core/config/cryptoutil/cryptoutils.go b/pkg/core/config/cryptoutil/cryptoutils.go
+index 2bed3a68..d46cc994 100644
+--- a/pkg/core/config/cryptoutil/cryptoutils.go
++++ b/pkg/core/config/cryptoutil/cryptoutils.go
+@@ -11,7 +11,7 @@ import (
+ 	"crypto/ecdsa"
+ 	"crypto/rsa"
+ 	"crypto/tls"
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"encoding/pem"
+ 	"io"
+ 
+@@ -20,6 +20,7 @@ import (
+ 	"github.com/pkg/errors"
+ 
+ 	factory "github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric-ca/sdkpatch/cryptosuitebridge"
++	"github.com/swordboy/crypto/sm/sm2"
+ )
+ 
+ var logger = logging.NewLogger("fabsdk/core")
+@@ -106,6 +107,8 @@ func X509KeyPair(certPEMBlock []byte, pk core.Key, cs core.CryptoSuite) (tls.Cer
+ 		cert.PrivateKey = &PrivateKey{cs, pk, &rsa.PublicKey{}}
+ 	case *ecdsa.PublicKey:
+ 		cert.PrivateKey = &PrivateKey{cs, pk, &ecdsa.PublicKey{}}
++	case *sm2.PublicKey:
++		cert.PrivateKey = &PrivateKey{cs, pk, &sm2.PublicKey{}}
+ 	default:
+ 		return fail(errors.New("tls: unknown public key algorithm"))
+ 	}
+diff --git a/pkg/core/cryptosuite/bccsp/sw/cryptosuiteimpl.go b/pkg/core/cryptosuite/bccsp/sw/cryptosuiteimpl.go
+index ae0f9284..fffe8a97 100644
+--- a/pkg/core/cryptosuite/bccsp/sw/cryptosuiteimpl.go
++++ b/pkg/core/cryptosuite/bccsp/sw/cryptosuiteimpl.go
+@@ -8,7 +8,7 @@ package sw
+ 
+ import (
+ 	"github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric/bccsp"
+-	bccspSw "github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric/bccsp/factory/sw"
++	bccspFactory "github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric/bccsp/factory"
+ 	"github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric/bccsp/sw"
+ 	"github.com/hyperledger/fabric-sdk-go/pkg/common/logging"
+ 	"github.com/hyperledger/fabric-sdk-go/pkg/common/providers/core"
+@@ -44,10 +44,10 @@ func GetSuiteWithDefaultEphemeral() (core.CryptoSuite, error) {
+ 	return wrapper.NewCryptoSuite(bccsp), nil
+ }
+ 
+-func getBCCSPFromOpts(config *bccspSw.SwOpts) (bccsp.BCCSP, error) {
+-	f := &bccspSw.SWFactory{}
++func getBCCSPFromOpts(config *bccspFactory.SwOpts) (bccsp.BCCSP, error) {
++	f := &bccspFactory.GMFactory{}
+ 
+-	csp, err := f.Get(config)
++	csp, err := f.GetBySwOpts(config)
+ 	if err != nil {
+ 		return nil, errors.Wrapf(err, "Could not initialize BCCSP %s", f.Name())
+ 	}
+@@ -65,11 +65,11 @@ func GetSuite(securityLevel int, hashFamily string, keyStore bccsp.KeyStore) (co
+ }
+ 
+ //GetOptsByConfig Returns Factory opts for given SDK config
+-func getOptsByConfig(c core.CryptoSuiteConfig) *bccspSw.SwOpts {
+-	opts := &bccspSw.SwOpts{
++func getOptsByConfig(c core.CryptoSuiteConfig) *bccspFactory.SwOpts {
++	opts := &bccspFactory.SwOpts{
+ 		HashFamily: c.SecurityAlgorithm(),
+ 		SecLevel:   c.SecurityLevel(),
+-		FileKeystore: &bccspSw.FileKeystoreOpts{
++		FileKeystore: &bccspFactory.FileKeystoreOpts{
+ 			KeyStorePath: c.KeyStorePath(),
+ 		},
+ 	}
+@@ -78,8 +78,8 @@ func getOptsByConfig(c core.CryptoSuiteConfig) *bccspSw.SwOpts {
+ 	return opts
+ }
+ 
+-func getEphemeralOpts() *bccspSw.SwOpts {
+-	opts := &bccspSw.SwOpts{
++func getEphemeralOpts() *bccspFactory.SwOpts {
++	opts := &bccspFactory.SwOpts{
+ 		HashFamily: "SHA2",
+ 		SecLevel:   256,
+ 		Ephemeral:  false,
+diff --git a/pkg/core/cryptosuite/cryptosuite.go b/pkg/core/cryptosuite/cryptosuite.go
+index 574450d3..4f92c2e3 100644
+--- a/pkg/core/cryptosuite/cryptosuite.go
++++ b/pkg/core/cryptosuite/cryptosuite.go
+@@ -83,6 +83,10 @@ func GetSHAOpts() core.HashOpts {
+ 	return &bccsp.SHAOpts{}
+ }
+ 
++func GetSM3Opts() core.HashOpts {
++	return &bccsp.SM3Opts{}
++}
++
+ //GetECDSAP256KeyGenOpts returns options for ECDSA key generation with curve P-256.
+ func GetECDSAP256KeyGenOpts(ephemeral bool) core.KeyGenOpts {
+ 	return &bccsp.ECDSAP256KeyGenOpts{Temporary: ephemeral}
+diff --git a/pkg/fab/channel/membership/membership.go b/pkg/fab/channel/membership/membership.go
+index fd450cde..04f18509 100644
+--- a/pkg/fab/channel/membership/membership.go
++++ b/pkg/fab/channel/membership/membership.go
+@@ -7,7 +7,7 @@ SPDX-License-Identifier: Apache-2.0
+ package membership
+ 
+ import (
+-	"crypto/x509"
++	"github.com/swordboy/crypto/x509"
+ 	"encoding/pem"
+ 
+ 	"strings"
+@@ -20,6 +20,7 @@ import (
+ 	"github.com/hyperledger/fabric-sdk-go/pkg/common/providers/fab"
+ 	mb "github.com/hyperledger/fabric-sdk-go/third_party/github.com/hyperledger/fabric/protos/msp"
+ 	"github.com/pkg/errors"
++	originalX509 "crypto/x509"
+ )
+ 
+ var logger = logging.NewLogger("fabsdk/fab")
+@@ -216,7 +217,7 @@ func addCertsToConfig(config fab.EndpointConfig, pemCertsList [][]byte) {
+ 		return
+ 	}
+ 
+-	var certs []*x509.Certificate
++	var certs []*originalX509.Certificate
+ 	for _, pemCerts := range pemCertsList {
+ 		for len(pemCerts) > 0 {
+ 			var block *pem.Block
+@@ -228,11 +229,11 @@ func addCertsToConfig(config fab.EndpointConfig, pemCertsList [][]byte) {
+ 				continue
+ 			}
+ 
+-			cert, err := x509.ParseCertificate(block.Bytes)
++			cert, err := originalX509.ParseCertificate(block.Bytes)
+ 			if err != nil {
+ 				continue
+ 			}
+-			err = verifier.ValidateCertificateDates(cert)
++			err = verifier.ValidateOriginalCertificateDates(cert)
+ 			if err != nil {
+ 				logger.Warn("%v", err)
+ 				continue
+diff --git a/pkg/fab/comm/connection.go b/pkg/fab/comm/connection.go
+index 355b75a2..e8e1b30b 100755
+--- a/pkg/fab/comm/connection.go
++++ b/pkg/fab/comm/connection.go
+@@ -134,7 +134,7 @@ func newDialOpts(config fab.EndpointConfig, url string, params *params) ([]grpc.
+ 		}
+ 		//verify if certificate was expired or not yet valid
+ 		tlsConfig.VerifyPeerCertificate = func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+-			return verifier.VerifyPeerCertificate(rawCerts, verifiedChains)
++			return verifier.VerifyOriginalPeerCertificate(rawCerts, verifiedChains)
+ 		}
+ 
+ 		dialOpts = append(dialOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
+diff --git a/pkg/fab/comm/streamconnection.go b/pkg/fab/comm/streamconnection.go
+index 297398ce..cb0c5ad3 100755
+--- a/pkg/fab/comm/streamconnection.go
++++ b/pkg/fab/comm/streamconnection.go
+@@ -58,7 +58,7 @@ func NewStreamConnection(ctx fabcontext.Client, chConfig fab.ChannelCfg, streamP
+ 	if peer.AuthInfo != nil {
+ 		tlsInfo := peer.AuthInfo.(credentials.TLSInfo)
+ 		for _, peercert := range tlsInfo.State.PeerCertificates {
+-			err := verifier.ValidateCertificateDates(peercert)
++			err := verifier.ValidateOriginalCertificateDates(peercert)
+ 			if err != nil {
+ 				logger.Error(err)
+ 				return nil, errors.Wrapf(err, "error validating certificate dates for [%v]", peercert.Subject)
+diff --git a/pkg/fab/orderer/orderer.go b/pkg/fab/orderer/orderer.go
+index 34c70cd5..a025d8c5 100644
+--- a/pkg/fab/orderer/orderer.go
++++ b/pkg/fab/orderer/orderer.go
+@@ -8,7 +8,6 @@ package orderer
+ 
+ import (
+ 	reqContext "context"
+-	"crypto/x509"
+ 	"io"
+ 	"time"
+ 
+@@ -29,6 +28,7 @@ import (
+ 	"github.com/hyperledger/fabric-sdk-go/pkg/core/config/comm"
+ 	"github.com/hyperledger/fabric-sdk-go/pkg/core/config/endpoint"
+ 	"github.com/hyperledger/fabric-sdk-go/third_party/github.com/hyperledger/fabric/protos/common"
++	originalX509 "crypto/x509"
+ )
+ 
+ var logger = logging.NewLogger("fabsdk/fab")
+@@ -44,7 +44,7 @@ type Orderer struct {
+ 	config         fab.EndpointConfig
+ 	url            string
+ 	serverName     string
+-	tlsCACert      *x509.Certificate
++	tlsCACert      *originalX509.Certificate
+ 	grpcDialOption []grpc.DialOption
+ 	kap            keepalive.ClientParameters
+ 	dialTimeout    time.Duration
+@@ -81,8 +81,8 @@ func New(config fab.EndpointConfig, opts ...Option) (*Orderer, error) {
+ 		if err != nil {
+ 			return nil, err
+ 		}
+-		tlsConfig.VerifyPeerCertificate = func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+-			return verifier.VerifyPeerCertificate(rawCerts, verifiedChains)
++		tlsConfig.VerifyPeerCertificate = func(rawCerts [][]byte, verifiedChains [][]*originalX509.Certificate) error {
++			return verifier.VerifyOriginalPeerCertificate(rawCerts, verifiedChains)
+ 		}
+ 
+ 		grpcOpts = append(grpcOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
+@@ -110,7 +110,7 @@ func WithURL(url string) Option {
+ }
+ 
+ // WithTLSCert is a functional option for the orderer.New constructor that configures the orderer's TLS certificate
+-func WithTLSCert(tlsCACert *x509.Certificate) Option {
++func WithTLSCert(tlsCACert *originalX509.Certificate) Option {
+ 	return func(o *Orderer) error {
+ 		o.tlsCACert = tlsCACert
+ 
+@@ -145,7 +145,7 @@ func FromOrdererConfig(ordererCfg *fab.OrdererConfig) Option {
+ 
+ 		if ordererCfg.GRPCOptions["allow-insecure"] == false {
+ 			//verify if certificate was expired or not yet valid
+-			err := verifier.ValidateCertificateDates(o.tlsCACert)
++			err := verifier.ValidateOriginalCertificateDates(o.tlsCACert)
+ 			if err != nil {
+ 				//log this error
+ 				logger.Warn(err)
+diff --git a/pkg/fab/peer/peer.go b/pkg/fab/peer/peer.go
+index 56ee627b..8e9c86e2 100644
+--- a/pkg/fab/peer/peer.go
++++ b/pkg/fab/peer/peer.go
+@@ -136,7 +136,7 @@ func FromPeerConfig(peerCfg *fab.NetworkPeer) Option {
+ 		p.certificate = peerCfg.TLSCACert
+ 		if peerCfg.GRPCOptions["allow-insecure"] == false {
+ 			//verify if certificate was expired or not yet valid
+-			err = verifier.ValidateCertificateDates(p.certificate)
++			err = verifier.ValidateOriginalCertificateDates(p.certificate)
+ 			if err != nil {
+ 				logger.Warn(err)
+ 			}
+diff --git a/pkg/fab/peer/peerendorser.go b/pkg/fab/peer/peerendorser.go
+index 4dcf6310..2c5744ee 100644
+--- a/pkg/fab/peer/peerendorser.go
++++ b/pkg/fab/peer/peerendorser.go
+@@ -76,7 +76,7 @@ func newPeerEndorser(endorseReq *peerEndorserRequest) (*peerEndorser, error) {
+ 		}
+ 		//verify if certificate was expired or not yet valid
+ 		tlsConfig.VerifyPeerCertificate = func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+-			return verifier.VerifyPeerCertificate(rawCerts, verifiedChains)
++			return verifier.VerifyOriginalPeerCertificate(rawCerts, verifiedChains)
+ 		}
+ 		grpcOpts = append(grpcOpts, grpc.WithTransportCredentials(credentials.NewTLS(tlsConfig)))
+ 	} else {
+diff --git a/pkg/fab/signingmgr/signingmgr.go b/pkg/fab/signingmgr/signingmgr.go
+index 29054cb4..734b1e8e 100644
+--- a/pkg/fab/signingmgr/signingmgr.go
++++ b/pkg/fab/signingmgr/signingmgr.go
+@@ -38,7 +38,6 @@ func (mgr *SigningManager) Sign(object []byte, key core.Key) ([]byte, error) {
+ 	if key == nil {
+ 		return nil, errors.New("key (for signing) required")
+ 	}
+-
+ 	digest, err := mgr.cryptoProvider.Hash(object, mgr.hashOpts)
+ 	if err != nil {
+ 		return nil, err
+diff --git a/sdk_usage.go b/sdk_usage.go
+new file mode 100644
+index 00000000..64689d93
+--- /dev/null
++++ b/sdk_usage.go
+@@ -0,0 +1,308 @@
++package main
++
++import (
++	"crypto/x509"
++	"encoding/hex"
++	"encoding/pem"
++	"fmt"
++	"github.com/astaxie/beego"
++	"github.com/golang/protobuf/proto"
++	"github.com/hyperledger/fabric-sdk-go/pkg/client/channel"
++	"github.com/hyperledger/fabric-sdk-go/pkg/client/msp"
++	"github.com/hyperledger/fabric-sdk-go/pkg/common/providers/context"
++	"github.com/hyperledger/fabric-sdk-go/pkg/core/config"
++	"github.com/hyperledger/fabric-sdk-go/pkg/fab/events/client"
++	"github.com/hyperledger/fabric-sdk-go/pkg/fabsdk"
++	"github.com/hyperledger/fabric-sdk-go/third_party/github.com/hyperledger/fabric/core/ledger/kvledger/txmgmt/rwsetutil"
++	fabriccmn "github.com/hyperledger/fabric-sdk-go/third_party/github.com/hyperledger/fabric/protos/common"
++	mspproto "github.com/hyperledger/fabric-sdk-go/third_party/github.com/hyperledger/fabric/protos/msp"
++	pb "github.com/hyperledger/fabric-sdk-go/third_party/github.com/hyperledger/fabric/protos/peer"
++	"github.com/hyperledger/fabric-sdk-go/third_party/github.com/hyperledger/fabric/protos/utils"
++	"time"
++	"github.com/hyperledger/fabric-sdk-go/pkg/common/providers/fab"
++)
++
++var channelName = "mychannel"
++var org1 = "Org1"
++var user = "User1"
++var admin = "Admin"
++var chainCodeId = "mycc"
++
++func main() {
++	testOrginalSdk()
++	//testCaClient()
++}
++
++func testCaClient() {
++	cfg := config.FromFile(fmt.Sprintf("./network_config.yaml"))
++	sdk, err := fabsdk.New(cfg)
++	if err != nil {
++		fmt.Println("failed to create new sdk", err)
++	}
++	defer sdk.Close()
++	ctxProvider := sdk.Context()
++
++	// Get the Client.
++	// Without WithOrg option, uses default client organization.
++	mspClient, err := msp.New(ctxProvider)
++	if err != nil {
++		panic(err)
++	}
++	registrarEnrollID, registrarEnrollSecret := getRegistrarEnrollmentCredentials(ctxProvider)
++	err = mspClient.Enroll(registrarEnrollID, msp.WithSecret(registrarEnrollSecret),
++		msp.WithKeyAlgo("sm2"))
++	if err != nil {
++		panic(err)
++	}
++	fmt.Println("admin enroll success")
++	//request := new(msp.RegistrationRequest)
++	//request.Name = "potato"
++	//request.Secret = "potato"
++	//result, err := mspClient.Register(request)
++	//if err != nil {
++	//	panic(err)
++	//}
++	//fmt.Println("registration success", result)
++	registrarEnrollID, registrarEnrollSecret = "potato", "potato"
++	err = mspClient.Enroll(registrarEnrollID, msp.WithSecret(registrarEnrollSecret),
++		msp.WithKeyAlgo("rsa"),msp.WithKeySize(2048))
++	if err != nil {
++		panic(err)
++	}
++	fmt.Println("enroll success")
++}
++
++func getRegistrarEnrollmentCredentials(ctxProvider context.ClientProvider) (string, string) {
++
++	ctx, err := ctxProvider()
++	if err != nil {
++		panic(err)
++	}
++
++	myOrg := ctx.IdentityConfig().Client().Organization
++
++	caConfig, ok := ctx.IdentityConfig().CAConfig(myOrg)
++	if !ok {
++		panic(err)
++	}
++	return caConfig.Registrar.EnrollID, caConfig.Registrar.EnrollSecret
++}
++
++func testOrginalSdk() {
++	cfg := config.FromFile(fmt.Sprintf("./network_config.yaml"))
++	sdk, err := fabsdk.New(cfg)
++	if err != nil {
++		fmt.Println("failed to create new sdk", err)
++	}
++	defer sdk.Close()
++	ctx, err := sdk.Context()()
++	if err != nil {
++		panic(err)
++	}
++	var peer fab.Peer
++	for name, peerCfg := range ctx.EndpointConfig().NetworkConfig().Peers {
++		if name == "peer0.org1.example.com" {
++			endorser, err := ctx.InfraProvider().CreatePeerFromConfig(&fab.NetworkPeer{PeerConfig: peerCfg})
++			if err != nil {
++				panic(err)
++			}
++			peer = endorser
++			break
++		}
++	}
++	if peer == nil {
++		panic("target is not found")
++	}
++	testQueryChainCode(sdk, peer)
++	//testListenBlockEvent(sdk)
++}
++
++func testQueryChainCode(sdk *fabsdk.FabricSDK, peer fab.Peer) {
++	channelProvider := sdk.ChannelContext(channelName, fabsdk.WithUser(admin), fabsdk.WithOrg(org1))
++	channelClient, err := channel.New(channelProvider)
++	if err != nil {
++		fmt.Println("failed to create channel client", err)
++		return
++	}
++	var args [][]byte
++	args = append(args, []byte("a"))
++	var opts []channel.RequestOption
++	opts = append(opts, channel.WithTargets(peer))
++	request := channel.Request{
++		ChaincodeID: chainCodeId,
++		Fcn:         "query",
++		Args:        args,
++	}
++	response, err := channelClient.Query(request, opts...)
++	if err != nil {
++		fmt.Println("failed to query ", err)
++	} else {
++		fmt.Println("query a", string(response.Payload))
++	}
++	args = [][]byte{[]byte("b"), []byte("a"), []byte("10")}
++	response, err = channelClient.Execute(channel.Request{
++		ChaincodeID: chainCodeId,
++		Fcn:         "invoke",
++		Args:        args,
++	}, opts...)
++	if err != nil {
++		fmt.Println("failed to invoke ", err)
++	} else {
++		fmt.Println("invoke b a", response.Responses[0].Response.Message)
++	}
++	args = [][]byte{[]byte("b")}
++	request = channel.Request{
++		ChaincodeID: chainCodeId,
++		Fcn:         "query",
++		Args:        args,
++	}
++	time.Sleep(10 * time.Second)
++	response, err = channelClient.Query(request, opts...)
++	if err != nil {
++		fmt.Println("failed to query after invoke", err)
++	} else {
++		fmt.Println("query a after invoke", string(response.Payload))
++	}
++}
++
++func testListenBlockEvent(sdk *fabsdk.FabricSDK) {
++	channelContextProvider := sdk.ChannelContext(channelName, fabsdk.WithUser(user), fabsdk.WithOrg(org1))
++
++	channelContext, err := channelContextProvider()
++	if err != nil {
++		fmt.Println("failed to get channel context", err)
++		return
++	}
++	eventService, err := channelContext.ChannelService().EventService(client.WithBlockEvents())
++	channelContext.ChannelService().Config()
++	if err != nil {
++		fmt.Println("error getting event service:", err)
++		return
++	}
++	breg, beventch, err := eventService.RegisterBlockEvent()
++	if err != nil {
++		fmt.Println("error register", err)
++		return
++	}
++	defer eventService.Unregister(breg)
++	for {
++		select {
++		case event, ok := <-beventch:
++			if !ok {
++				fmt.Println("unexpected closed channel while waiting for block event")
++			}
++			fmt.Printf("Received block event: %#v\n", event)
++			if event.Block == nil {
++				fmt.Println("Expecting block in block event but got nil")
++				continue
++			}
++			block := event.Block
++			fmt.Println("header:  block number", block.Header.Number)
++			fmt.Println("header:  block data hash ", hex.EncodeToString(block.Header.DataHash))
++			fmt.Println("header:  block previous data hash", hex.EncodeToString(block.Header.PreviousHash))
++			meta := new(fabriccmn.Metadata)
++			metaBytes := block.Metadata.Metadata[fabriccmn.BlockMetadataIndex_SIGNATURES]
++			proto.Unmarshal(metaBytes, meta)
++			//显示背书
++			for _, signature := range meta.Signatures {
++				shdr, err := utils.GetSignatureHeader(signature.SignatureHeader)
++				if err != nil {
++					beego.Error(err)
++					continue
++				}
++				sid := new(mspproto.SerializedIdentity)
++				proto.Unmarshal(shdr.Creator, sid)
++				fmt.Println("signature msp id", sid.Mspid)
++				idbytes := sid.GetIdBytes()
++				certBlock, _ := pem.Decode(idbytes)
++				if block == nil {
++					continue
++				}
++				cert, err := x509.ParseCertificate(certBlock.Bytes)
++				if err != nil {
++					continue
++				}
++				fmt.Println("signature cn:", cert.Subject.CommonName)
++			}
++			for i := range block.Data.Data {
++				fmt.Println("evelope ", i)
++				envelope := utils.ExtractEnvelopeOrPanic(block, i)
++				payload := utils.ExtractPayloadOrPanic(envelope)
++				chdr, _ := utils.UnmarshalChannelHeader(payload.Header.ChannelHeader)
++				fmt.Println("channel header", chdr.ChannelId)
++				fmt.Println("channel header", chdr.TxId)
++				fmt.Println("channel timestamp", time.Unix(chdr.Timestamp.Seconds, int64(chdr.Timestamp.Nanos)))
++				headerType := fabriccmn.HeaderType(chdr.Type)
++				fmt.Println("channel block type ", headerType)
++				shdr, _ := utils.GetSignatureHeader(payload.Header.SignatureHeader)
++				sid := new(mspproto.SerializedIdentity)
++				proto.Unmarshal(shdr.Creator, sid)
++				fmt.Println("creator msp id", sid.Mspid)
++				idbytes := sid.GetIdBytes()
++				certBlock, _ := pem.Decode(idbytes)
++				if block == nil {
++					continue
++				}
++				cert, err := x509.ParseCertificate(certBlock.Bytes)
++				if err != nil {
++					continue
++				}
++				fmt.Println("creator cn:", cert.Subject.CommonName)
++				if headerType == fabriccmn.HeaderType_ENDORSER_TRANSACTION {
++					tx, _ := utils.GetTransaction(payload.Data)
++					for i, action := range tx.Actions {
++						fmt.Println("tx action", i)
++						shdr, _ := utils.GetSignatureHeader(action.Header)
++						sid := new(mspproto.SerializedIdentity)
++						proto.Unmarshal(shdr.Creator, sid)
++						fmt.Println("tx msp id", sid.Mspid)
++						chaPayload, _ := utils.GetChaincodeActionPayload(action.Payload)
++						proposalPayload := new(pb.ChaincodeProposalPayload)
++						proto.Unmarshal(chaPayload.ChaincodeProposalPayload, proposalPayload)
++						cis := &pb.ChaincodeInvocationSpec{}
++						proto.Unmarshal(proposalPayload.Input, cis)
++						fmt.Println("invoke chain code ", cis.ChaincodeSpec.ChaincodeId)
++						args := make([]string, 0)
++						for _, bs := range cis.ChaincodeSpec.Input.Args {
++							args = append(args, string(bs))
++						}
++						fmt.Println("invoke chain code args", args)
++						for key, value := range proposalPayload.TransientMap {
++							fmt.Println("transient key", key)
++							fmt.Println("transient value", value)
++						}
++						for _, endorsement := range chaPayload.Action.Endorsements {
++							sid := new(mspproto.SerializedIdentity)
++							proto.Unmarshal(endorsement.Endorser, sid)
++							fmt.Println("tx  endorsement msp id", sid.Mspid)
++							fmt.Println("tx endormsent signature", hex.EncodeToString(endorsement.Signature))
++						}
++						prp := new(pb.ProposalResponsePayload)
++						proto.Unmarshal(chaPayload.Action.ProposalResponsePayload, prp)
++						chaincodeAction := &pb.ChaincodeAction{}
++						proto.Unmarshal(prp.Extension, chaincodeAction)
++						fmt.Println("response status", chaincodeAction.Response.Status)
++						fmt.Println("response payload", string(chaincodeAction.Response.Payload))
++						txRWSet := &rwsetutil.TxRwSet{}
++						txRWSet.FromProtoBytes(chaincodeAction.Results)
++						for _, rwSet := range txRWSet.NsRwSets {
++							for _, read := range rwSet.KvRwSet.Reads {
++								fmt.Println("response read set", read.Key, read.Version)
++							}
++							for _, write := range rwSet.KvRwSet.Writes {
++								fmt.Println("response write set", write.Key, string(write.Value), write.IsDelete)
++							}
++						}
++
++						chaincodeEvent := &pb.ChaincodeEvent{}
++						proto.Unmarshal(chaincodeAction.Events, chaincodeEvent)
++						fmt.Println("event payload", string(chaincodeEvent.Payload))
++						fmt.Println("event name", chaincodeEvent.EventName)
++					}
++				}
++			}
++		case <-time.After(500 * time.Second):
++		}
++	}
++	time.Sleep(time.Duration(time.Second * 100))
++}
+-- 
+2.20.1.windows.1
+

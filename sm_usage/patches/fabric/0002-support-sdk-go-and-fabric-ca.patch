@@ -1,0 +1,108 @@
+From 06e319ccaf652315ee8e0b95a97d3210912550fc Mon Sep 17 00:00:00 2001
+From: fengjianjian <fengjj@7zhilu.com>
+Date: Wed, 2 Jan 2019 16:41:02 +0800
+Subject: [PATCH 2/4] support sdk-go and fabric-ca
+
+---
+ bccsp/opts.go         | 16 ++++++++++++++++
+ bccsp/sw/keyimport.go | 25 +++++++++++++++++++++++++
+ bccsp/sw/new.go       |  1 +
+ bccsp/utils/keys.go   |  7 +++++++
+ 4 files changed, 49 insertions(+)
+
+diff --git a/bccsp/opts.go b/bccsp/opts.go
+index e81e50cb8..89da0aef1 100644
+--- a/bccsp/opts.go
++++ b/bccsp/opts.go
+@@ -289,6 +289,22 @@ func (opts *RSAKeyGenOpts) Ephemeral() bool {
+ 	return opts.Temporary
+ }
+ 
++// RSA2048PrivateKeyImportOpts contains options for RSA2048 secret key importation in DER format
++type RSA2048PrivateKeyImportOpts struct {
++	Temporary bool
++}
++
++// Algorithm returns the key importation algorithm identifier (to be used).
++func (opts *RSA2048PrivateKeyImportOpts) Algorithm() string {
++	return RSA2048
++}
++
++// Ephemeral returns true if the key to generate has to be ephemeral,
++// false otherwise.
++func (opts *RSA2048PrivateKeyImportOpts) Ephemeral() bool {
++	return opts.Temporary
++}
++
+ // ECDSAGoPublicKeyImportOpts contains options for RSA key importation from rsa.PublicKey
+ type RSAGoPublicKeyImportOpts struct {
+ 	Temporary bool
+diff --git a/bccsp/sw/keyimport.go b/bccsp/sw/keyimport.go
+index b2003fb5b..e9c88eef0 100644
+--- a/bccsp/sw/keyimport.go
++++ b/bccsp/sw/keyimport.go
+@@ -112,6 +112,31 @@ func (*ecdsaPrivateKeyImportOptsKeyImporter) KeyImport(raw interface{}, opts bcc
+ 	return &ecdsaPrivateKey{ecdsaSK}, nil
+ }
+ 
++type rsaPrivatekeyImportOptsKeyImporter struct {
++}
++
++func (*rsaPrivatekeyImportOptsKeyImporter) KeyImport(raw interface{}, opts bccsp.KeyImportOpts) (bccsp.Key, error) {
++	der, ok := raw.([]byte)
++	if !ok {
++		return nil, errors.New("[RSA2048PrivateKeyImportOpts] Invalid raw material. Expected byte array.")
++	}
++
++	if len(der) == 0 {
++		return nil, errors.New("[RSA2048PrivateKeyImportOpts] Invalid raw. It must not be nil.")
++	}
++
++	lowLevelKey, err := utils.DERToPrivateKey(der)
++	if err != nil {
++		return nil, fmt.Errorf("Failed converting PKIX to rsa public key [%s]", err)
++	}
++
++	rsaSK, ok := lowLevelKey.(*rsa.PrivateKey)
++	if !ok {
++		return nil, errors.New("Failed casting to rsa private key. Invalid raw material.")
++	}
++	return &rsaPrivateKey{rsaSK}, nil
++}
++
+ type ecdsaGoPublicKeyImportOptsKeyImporter struct{}
+ 
+ func (*ecdsaGoPublicKeyImportOptsKeyImporter) KeyImport(raw interface{}, opts bccsp.KeyImportOpts) (bccsp.Key, error) {
+diff --git a/bccsp/sw/new.go b/bccsp/sw/new.go
+index 9959fab44..b82b3cef6 100644
+--- a/bccsp/sw/new.go
++++ b/bccsp/sw/new.go
+@@ -101,6 +101,7 @@ func NewWithParams(securityLevel int, hashFamily string, keyStore bccsp.KeyStore
+ 	swbccsp.AddWrapper(reflect.TypeOf(&bccsp.ECDSAGoPublicKeyImportOpts{}), &ecdsaGoPublicKeyImportOptsKeyImporter{})
+ 	swbccsp.AddWrapper(reflect.TypeOf(&bccsp.RSAGoPublicKeyImportOpts{}), &rsaGoPublicKeyImportOptsKeyImporter{})
+ 	swbccsp.AddWrapper(reflect.TypeOf(&bccsp.X509PublicKeyImportOpts{}), &x509PublicKeyImportOptsKeyImporter{bccsp: swbccsp})
++	swbccsp.AddWrapper(reflect.TypeOf(&bccsp.RSA2048PrivateKeyImportOpts{}), &rsaPrivatekeyImportOptsKeyImporter{})
+ 
+ 	return swbccsp, nil
+ }
+diff --git a/bccsp/utils/keys.go b/bccsp/utils/keys.go
+index ee2d92813..428e2275c 100644
+--- a/bccsp/utils/keys.go
++++ b/bccsp/utils/keys.go
+@@ -74,6 +74,13 @@ func PrivateKeyToDER(privateKey *ecdsa.PrivateKey) ([]byte, error) {
+ 	return x509.MarshalECPrivateKey(privateKey)
+ }
+ 
++func RsaPrivateKeyToDER(privateKey *rsa.PrivateKey) ([]byte, error) {
++	if privateKey == nil {
++		return nil, errors.New("Invalid rsa private key. It must be different from nil.")
++	}
++	return x509.MarshalPKCS1PrivateKey(privateKey), nil
++}
++
+ // PrivateKeyToPEM converts the private key to PEM format.
+ // EC private keys are converted to PKCS#8 format.
+ // RSA private keys are converted to PKCS#1 format.
+-- 
+2.20.1.windows.1
+

@@ -1,25 +1,25 @@
-From 21fc1faa26fcf9ff8b3a21df79872bc17923a486 Mon Sep 17 00:00:00 2001
+From 83818befe0aec681203c802c96672ee003dd744c Mon Sep 17 00:00:00 2001
 From: fengjianjian <fengjj@7zhilu.com>
-Date: Fri, 14 Feb 2020 20:46:26 +0800
+Date: Sat, 15 Feb 2020 11:17:14 +0800
 Subject: [PATCH] add rsa support
 
 ---
- bccsp/opts.go                           | 16 ++++++++++++++++
- bccsp/sw/keyimport.go                   | 26 ++++++++++++++++++++++++++
+ bccsp/opts.go                           | 16 +++++++++++++++
+ bccsp/sw/keyimport.go                   | 26 ++++++++++++++++++++++++
  bccsp/sw/new.go                         |  1 +
  bccsp/sw/rsa.go                         |  8 ++++----
  bccsp/utils/keys.go                     |  7 +++++++
  common/tools/cryptogen/ca/ca_test.go    |  8 ++++----
- common/tools/cryptogen/ca/generator.go  | 17 ++++++++---------
- common/tools/cryptogen/csp/csp.go       | 15 ++++++++++-----
- common/tools/cryptogen/csp/csp_test.go  | 14 +++++++-------
- common/tools/cryptogen/main.go          | 27 ++++++++++++++-------------
- common/tools/cryptogen/msp/generator.go | 12 ++++++------
- common/tools/cryptogen/msp/msp_test.go  | 18 +++++++++---------
- 12 files changed, 112 insertions(+), 57 deletions(-)
+ common/tools/cryptogen/ca/generator.go  | 17 ++++++++--------
+ common/tools/cryptogen/csp/csp.go       | 16 +++++++++------
+ common/tools/cryptogen/csp/csp_test.go  | 14 ++++++-------
+ common/tools/cryptogen/main.go          | 27 +++++++++++++------------
+ common/tools/cryptogen/msp/generator.go | 12 +++++------
+ common/tools/cryptogen/msp/msp_test.go  | 18 ++++++++---------
+ 12 files changed, 112 insertions(+), 58 deletions(-)
 
 diff --git a/bccsp/opts.go b/bccsp/opts.go
-index e81e50c..4540131 100644
+index e81e50cb8..454013112 100644
 --- a/bccsp/opts.go
 +++ b/bccsp/opts.go
 @@ -305,6 +305,22 @@ func (opts *RSAGoPublicKeyImportOpts) Ephemeral() bool {
@@ -46,7 +46,7 @@ index e81e50c..4540131 100644
  type X509PublicKeyImportOpts struct {
  	Temporary bool
 diff --git a/bccsp/sw/keyimport.go b/bccsp/sw/keyimport.go
-index b2003fb..c70c796 100644
+index b2003fb5b..c70c796c9 100644
 --- a/bccsp/sw/keyimport.go
 +++ b/bccsp/sw/keyimport.go
 @@ -134,6 +134,32 @@ func (*rsaGoPublicKeyImportOptsKeyImporter) KeyImport(raw interface{}, opts bccs
@@ -83,7 +83,7 @@ index b2003fb..c70c796 100644
  	bccsp *CSP
  }
 diff --git a/bccsp/sw/new.go b/bccsp/sw/new.go
-index 9959fab..b82b3ce 100644
+index 9959fab44..b82b3cef6 100644
 --- a/bccsp/sw/new.go
 +++ b/bccsp/sw/new.go
 @@ -101,6 +101,7 @@ func NewWithParams(securityLevel int, hashFamily string, keyStore bccsp.KeyStore
@@ -95,7 +95,7 @@ index 9959fab..b82b3ce 100644
  	return swbccsp, nil
  }
 diff --git a/bccsp/sw/rsa.go b/bccsp/sw/rsa.go
-index 375990d..016b0bc 100644
+index 375990d33..016b0bc01 100644
 --- a/bccsp/sw/rsa.go
 +++ b/bccsp/sw/rsa.go
 @@ -17,9 +17,9 @@ limitations under the License.
@@ -137,7 +137,7 @@ index 375990d..016b0bc 100644
  	switch opts.(type) {
  	case *rsa.PSSOptions:
 diff --git a/bccsp/utils/keys.go b/bccsp/utils/keys.go
-index ee2d928..428e227 100644
+index ee2d92813..428e2275c 100644
 --- a/bccsp/utils/keys.go
 +++ b/bccsp/utils/keys.go
 @@ -74,6 +74,13 @@ func PrivateKeyToDER(privateKey *ecdsa.PrivateKey) ([]byte, error) {
@@ -155,7 +155,7 @@ index ee2d928..428e227 100644
  // EC private keys are converted to PKCS#8 format.
  // RSA private keys are converted to PKCS#1 format.
 diff --git a/common/tools/cryptogen/ca/ca_test.go b/common/tools/cryptogen/ca/ca_test.go
-index 95fc39b..01720fc 100644
+index 95fc39baa..01720fc6f 100644
 --- a/common/tools/cryptogen/ca/ca_test.go
 +++ b/common/tools/cryptogen/ca/ca_test.go
 @@ -40,11 +40,11 @@ func TestLoadCertificateECDSA(t *testing.T) {
@@ -187,7 +187,7 @@ index 95fc39b..01720fc 100644
  	assert.NotNil(t, ecPubKey, "Failed to generate signed certificate")
  
 diff --git a/common/tools/cryptogen/ca/generator.go b/common/tools/cryptogen/ca/generator.go
-index 7651ac4..14ba65c 100644
+index 7651ac453..14ba65c9a 100644
 --- a/common/tools/cryptogen/ca/generator.go
 +++ b/common/tools/cryptogen/ca/generator.go
 @@ -7,7 +7,6 @@ package ca
@@ -259,7 +259,7 @@ index 7651ac4..14ba65c 100644
  
  	//create the x509 public cert
 diff --git a/common/tools/cryptogen/csp/csp.go b/common/tools/cryptogen/csp/csp.go
-index 40cfaea..f120f85 100644
+index 40cfaea00..ad83a2096 100644
 --- a/common/tools/cryptogen/csp/csp.go
 +++ b/common/tools/cryptogen/csp/csp.go
 @@ -7,7 +7,6 @@ package csp
@@ -279,20 +279,21 @@ index 40cfaea..f120f85 100644
  	crypto.Signer, error) {
  
  	var err error
-@@ -98,6 +97,12 @@ func GeneratePrivateKey(keystorePath string) (bccsp.Key,
- 		},
- 	}
+@@ -100,7 +99,12 @@ func GeneratePrivateKey(keystorePath string) (bccsp.Key,
  	csp, err := factory.GetBCCSPFromOpts(opts)
-+	var opt bccsp.KeyGenOpts
-+	opt = &bccsp.ECDSAP256KeyGenOpts{Temporary: false}
-+	if strings.ToUpper(algo) == bccsp.RSA {
-+		opt = &bccsp.RSAKeyGenOpts{Temporary: false}
-+	}
-+	priv, err = csp.KeyGen(opt)
  	if err == nil {
  		// generate a key
- 		priv, err = csp.KeyGen(&bccsp.ECDSAP256KeyGenOpts{Temporary: false})
-@@ -109,7 +114,7 @@ func GeneratePrivateKey(keystorePath string) (bccsp.Key,
+-		priv, err = csp.KeyGen(&bccsp.ECDSAP256KeyGenOpts{Temporary: false})
++		var opt bccsp.KeyGenOpts
++		opt = &bccsp.ECDSAP256KeyGenOpts{Temporary: false}
++		if strings.ToUpper(algo) == bccsp.RSA {
++			opt = &bccsp.RSAKeyGenOpts{Temporary: false}
++		}
++		priv, err = csp.KeyGen(opt)
+ 		if err == nil {
+ 			// create a crypto.Signer
+ 			s, err = signer.New(csp, priv)
+@@ -109,7 +113,7 @@ func GeneratePrivateKey(keystorePath string) (bccsp.Key,
  	return priv, s, err
  }
  
@@ -301,7 +302,7 @@ index 40cfaea..f120f85 100644
  
  	// get the public key
  	pubKey, err := priv.PublicKey()
-@@ -122,9 +127,9 @@ func GetECPublicKey(priv bccsp.Key) (*ecdsa.PublicKey, error) {
+@@ -122,9 +126,9 @@ func GetECPublicKey(priv bccsp.Key) (*ecdsa.PublicKey, error) {
  		return nil, err
  	}
  	// unmarshal using pkix
@@ -314,7 +315,7 @@ index 40cfaea..f120f85 100644
 +	return x509PubKey, nil
  }
 diff --git a/common/tools/cryptogen/csp/csp_test.go b/common/tools/cryptogen/csp/csp_test.go
-index f2210e1..8d8f2f6 100644
+index f2210e1b8..8d8f2f66b 100644
 --- a/common/tools/cryptogen/csp/csp_test.go
 +++ b/common/tools/cryptogen/csp/csp_test.go
 @@ -48,7 +48,7 @@ func (mk *mockKey) Private() bool { return false }
@@ -375,7 +376,7 @@ index f2210e1..8d8f2f6 100644
  
  	cleanup(testDir)
 diff --git a/common/tools/cryptogen/main.go b/common/tools/cryptogen/main.go
-index a1b5c41..cff0329 100644
+index a1b5c4161..cff0329be 100644
 --- a/common/tools/cryptogen/main.go
 +++ b/common/tools/cryptogen/main.go
 @@ -73,6 +73,7 @@ type OrgSpec struct {
@@ -500,7 +501,7 @@ index a1b5c41..cff0329 100644
  	// copy the admin cert to the org's MSP admincerts
  	if !orgSpec.EnableNodeOUs {
 diff --git a/common/tools/cryptogen/msp/generator.go b/common/tools/cryptogen/msp/generator.go
-index eb9c9c7..db4e234 100644
+index eb9c9c7ce..db4e23414 100644
 --- a/common/tools/cryptogen/msp/generator.go
 +++ b/common/tools/cryptogen/msp/generator.go
 @@ -42,7 +42,7 @@ var nodeOUMap = map[int]string{
@@ -553,7 +554,7 @@ index eb9c9c7..db4e234 100644
  		return err
  	}
 diff --git a/common/tools/cryptogen/msp/msp_test.go b/common/tools/cryptogen/msp/msp_test.go
-index 1e29c59..15ca4f3 100644
+index 1e29c599e..15ca4f3a8 100644
 --- a/common/tools/cryptogen/msp/msp_test.go
 +++ b/common/tools/cryptogen/msp/msp_test.go
 @@ -35,7 +35,7 @@ var testDir = filepath.Join(os.TempDir(), "msp-test")
@@ -623,5 +624,5 @@ index 1e29c59..15ca4f3 100644
  
  	err = msp.GenerateVerifyingMSP(mspDir, signCA, tlsCA, nodeOUs)
 -- 
-2.7.4
+2.20.1.windows.1
 
