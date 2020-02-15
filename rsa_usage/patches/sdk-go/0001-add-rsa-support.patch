@@ -1,0 +1,558 @@
+From a9238256ecb8ddea3dbc7736352b6340349ad33a Mon Sep 17 00:00:00 2001
+From: fengjianjian <fengjj@7zhilu.com>
+Date: Fri, 14 Feb 2020 20:45:32 +0800
+Subject: [PATCH] add rsa support
+
+---
+ .../cryptosuitebridge/cryptosuitebridge.go         |  11 ++
+ .../github.com/hyperledger/fabric-ca/util/csp.go   |  12 ++
+ .../github.com/hyperledger/fabric/bccsp/opts.go    |  63 +++++++++-
+ .../hyperledger/fabric/bccsp/sw/keyimport.go       |  44 ++++++-
+ .../github.com/hyperledger/fabric/bccsp/sw/new.go  |   1 +
+ .../github.com/hyperledger/fabric/bccsp/sw/rsa.go  |  72 +++++++++++
+ .../hyperledger/fabric/bccsp/sw/rsakey.go          | 133 +++++++++++++++++++++
+ .../hyperledger/fabric/bccsp/utils/keys.go         |   8 ++
+ pkg/msp/api/api.go                                 |  11 ++
+ pkg/msp/fabcaadapter.go                            |  13 ++
+ 10 files changed, 366 insertions(+), 2 deletions(-)
+ create mode 100644 internal/github.com/hyperledger/fabric/bccsp/sw/rsa.go
+ create mode 100644 internal/github.com/hyperledger/fabric/bccsp/sw/rsakey.go
+
+diff --git a/internal/github.com/hyperledger/fabric-ca/sdkpatch/cryptosuitebridge/cryptosuitebridge.go b/internal/github.com/hyperledger/fabric-ca/sdkpatch/cryptosuitebridge/cryptosuitebridge.go
+index c1ff92b..f29761d 100644
+--- a/internal/github.com/hyperledger/fabric-ca/sdkpatch/cryptosuitebridge/cryptosuitebridge.go
++++ b/internal/github.com/hyperledger/fabric-ca/sdkpatch/cryptosuitebridge/cryptosuitebridge.go
+@@ -13,6 +13,7 @@ package cryptosuitebridge
+ import (
+ 	"crypto"
+ 	"crypto/ecdsa"
++	"crypto/rsa"
+ 
+ 	"github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric/bccsp"
+ 	cspsigner "github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric/bccsp/signer"
+@@ -57,6 +58,11 @@ func PrivateKeyToDER(privateKey *ecdsa.PrivateKey) ([]byte, error) {
+ 	return utils.PrivateKeyToDER(privateKey)
+ }
+ 
++func RsaPrivateKeyToDer(privatekey *rsa.PrivateKey) ([]byte, error) {
++	return utils.RsaPrivateKeyToDER(privatekey)
++}
++
++
+ //GetDefault returns default cryptosuite from bccsp factory default
+ func GetDefault() core.CryptoSuite {
+ 	return cryptosuite.GetDefault()
+@@ -97,3 +103,8 @@ func GetX509PublicKeyImportOpts(ephemeral bool) core.KeyImportOpts {
+ func GetECDSAPrivateKeyImportOpts(ephemeral bool) core.KeyImportOpts {
+ 	return &bccsp.ECDSAPrivateKeyImportOpts{Temporary: ephemeral}
+ }
++
++//GetRSAPrivateKeyImportOpts options for rsa secret key importation in DER format
++func GetRSAPrivateKeyImportOpts(ephemeral bool) core.KeyImportOpts {
++	return &bccsp.RSA2048PrivateKeyImportOpts{Temporary: ephemeral}
++}
+\ No newline at end of file
+diff --git a/internal/github.com/hyperledger/fabric-ca/util/csp.go b/internal/github.com/hyperledger/fabric-ca/util/csp.go
+index f4e42e4..e26cffd 100644
+--- a/internal/github.com/hyperledger/fabric-ca/util/csp.go
++++ b/internal/github.com/hyperledger/fabric-ca/util/csp.go
+@@ -23,6 +23,7 @@ package util
+ import (
+ 	"crypto"
+ 	"crypto/ecdsa"
++	"crypto/rsa"
+ 	"crypto/tls"
+ 	"crypto/x509"
+ 	"encoding/hex"
+@@ -163,6 +164,17 @@ func ImportBCCSPKeyFromPEMBytes(keyBuff []byte, myCSP core.CryptoSuite, temporar
+ 			return nil, errors.WithMessage(err, fmt.Sprintf("Failed to import ECDSA private key for '%s'", keyFile))
+ 		}
+ 		return sk, nil
++	case *rsa.PrivateKey:
++		priv, err := factory.RsaPrivateKeyToDer(key.(*rsa.PrivateKey))
++		if err != nil {
++			return nil, errors.WithMessage(err, fmt.Sprintf("failed to convert rsa private for '%s'", keyFile))
++		}
++		sk, err := myCSP.KeyImport(priv, factory.GetRSAPrivateKeyImportOpts(temporary))
++		if err != nil {
++			return nil, errors.WithMessage(err, fmt.Sprintf("Failed to import rsa private key for '%s'", keyFile))
++		}
++		return sk, nil
++		//return nil, errors.Errorf("Failed to import RSA key from %s; RSA private key import is not supported", keyFile)
+ 	default:
+ 		return nil, errors.Errorf("Failed to import key from %s: invalid secret key type", keyFile)
+ 	}
+diff --git a/internal/github.com/hyperledger/fabric/bccsp/opts.go b/internal/github.com/hyperledger/fabric/bccsp/opts.go
+index 96dd985..d4ce3fc 100644
+--- a/internal/github.com/hyperledger/fabric/bccsp/opts.go
++++ b/internal/github.com/hyperledger/fabric/bccsp/opts.go
+@@ -26,6 +26,19 @@ const (
+ 	// ECDSAReRand ECDSA key re-randomization
+ 	ECDSAReRand = "ECDSA_RERAND"
+ 
++	// RSA at the default security level.
++	// Each BCCSP may or may not support default security level. If not supported than
++	// an error will be returned.
++	RSA = "RSA"
++	// RSA at 1024 bit security level.
++	RSA1024 = "RSA1024"
++	// RSA at 2048 bit security level.
++	RSA2048 = "RSA2048"
++	// RSA at 3072 bit security level.
++	RSA3072 = "RSA3072"
++	// RSA at 4096 bit security level.
++	RSA4096 = "RSA4096"
++
+ 	// AES Advanced Encryption Standard at the default security level.
+ 	// Each BCCSP may or may not support default security level. If not supported than
+ 	// an error will be returned.
+@@ -246,13 +259,61 @@ func (opts *HMACImportKeyOpts) Ephemeral() bool {
+ }
+ 
+ // SHAOpts contains options for computing SHA.
+-type SHAOpts struct{}
++type SHAOpts struct {}
+ 
+ // Algorithm returns the hash algorithm identifier (to be used).
+ func (opts *SHAOpts) Algorithm() string {
+ 	return SHA
+ }
+ 
++// RSAKeyGenOpts contains options for RSA key generation.
++type RSAKeyGenOpts struct {
++	Temporary bool
++}
++
++// Algorithm returns the key generation algorithm identifier (to be used).
++func (opts *RSAKeyGenOpts) Algorithm() string {
++	return RSA
++}
++
++// Ephemeral returns true if the key to generate has to be ephemeral,
++// false otherwise.
++func (opts *RSAKeyGenOpts) Ephemeral() bool {
++	return opts.Temporary
++}
++
++// ECDSAGoPublicKeyImportOpts contains options for RSA key importation from rsa.PublicKey
++type RSAGoPublicKeyImportOpts struct {
++	Temporary bool
++}
++
++// Algorithm returns the key importation algorithm identifier (to be used).
++func (opts *RSAGoPublicKeyImportOpts) Algorithm() string {
++	return RSA
++}
++
++// Ephemeral returns true if the key to generate has to be ephemeral,
++// false otherwise.
++func (opts *RSAGoPublicKeyImportOpts) Ephemeral() bool {
++	return opts.Temporary
++}
++
++// RSA2048PrivateKeyImportOpts contains options for RSA2048 secret key importation in DER format
++type RSA2048PrivateKeyImportOpts struct {
++	Temporary bool
++}
++
++// Algorithm returns the key importation algorithm identifier (to be used).
++func (opts *RSA2048PrivateKeyImportOpts) Algorithm() string {
++	return RSA2048
++}
++
++// Ephemeral returns true if the key to generate has to be ephemeral,
++// false otherwise.
++func (opts *RSA2048PrivateKeyImportOpts) Ephemeral() bool {
++	return opts.Temporary
++}
++
+ // X509PublicKeyImportOpts contains options for importing public keys from an x509 certificate
+ type X509PublicKeyImportOpts struct {
+ 	Temporary bool
+diff --git a/internal/github.com/hyperledger/fabric/bccsp/sw/keyimport.go b/internal/github.com/hyperledger/fabric/bccsp/sw/keyimport.go
+index 7d448fb..2a7fe3d 100644
+--- a/internal/github.com/hyperledger/fabric/bccsp/sw/keyimport.go
++++ b/internal/github.com/hyperledger/fabric/bccsp/sw/keyimport.go
+@@ -12,6 +12,7 @@ package sw
+ 
+ import (
+ 	"crypto/ecdsa"
++	"crypto/rsa"
+ 	"crypto/x509"
+ 	"errors"
+ 	"fmt"
+@@ -116,6 +117,43 @@ func (*ecdsaGoPublicKeyImportOptsKeyImporter) KeyImport(raw interface{}, opts bc
+ 	return &ecdsaPublicKey{lowLevelKey}, nil
+ }
+ 
++type rsaGoPublicKeyImportOptsKeyImporter struct{}
++
++func (*rsaGoPublicKeyImportOptsKeyImporter) KeyImport(raw interface{}, opts bccsp.KeyImportOpts) (bccsp.Key, error) {
++	lowLevelKey, ok := raw.(*rsa.PublicKey)
++	if !ok {
++		return nil, errors.New("Invalid raw material. Expected *rsa.PublicKey.")
++	}
++
++	return &rsaPublicKey{lowLevelKey}, nil
++}
++
++type rsaPrivatekeyImportOptsKeyImporter struct {
++}
++
++func (*rsaPrivatekeyImportOptsKeyImporter) KeyImport(raw interface{}, opts bccsp.KeyImportOpts) (bccsp.Key, error) {
++	der, ok := raw.([]byte)
++	if !ok {
++		return nil, errors.New("[RSA2048PrivateKeyImportOpts] Invalid raw material. Expected byte array.")
++	}
++
++	if len(der) == 0 {
++		return nil, errors.New("[RSA2048PrivateKeyImportOpts] Invalid raw. It must not be nil.")
++	}
++
++	lowLevelKey, err := utils.DERToPrivateKey(der)
++	if err != nil {
++		return nil, fmt.Errorf("Failed converting PKIX to rsa public key [%s]", err)
++	}
++
++	rsaSK, ok := lowLevelKey.(*rsa.PrivateKey)
++	if !ok {
++		return nil, errors.New("Failed casting to rsa private key. Invalid raw material.")
++	}
++	return &rsaPrivateKey{rsaSK}, nil
++}
++
++
+ type x509PublicKeyImportOptsKeyImporter struct {
+ 	bccsp *CSP
+ }
+@@ -133,7 +171,11 @@ func (ki *x509PublicKeyImportOptsKeyImporter) KeyImport(raw interface{}, opts bc
+ 		return ki.bccsp.KeyImporters[reflect.TypeOf(&bccsp.ECDSAGoPublicKeyImportOpts{})].KeyImport(
+ 			pk,
+ 			&bccsp.ECDSAGoPublicKeyImportOpts{Temporary: opts.Ephemeral()})
++	case *rsa.PublicKey:
++		return ki.bccsp.KeyImporters[reflect.TypeOf(&bccsp.RSAGoPublicKeyImportOpts{})].KeyImport(
++			pk,
++			&bccsp.RSAGoPublicKeyImportOpts{Temporary: opts.Ephemeral()})
+ 	default:
+-		return nil, errors.New("Certificate's public key type not recognized. Supported keys: [ECDSA]")
++		return nil, errors.New("Certificate's public key type not recognized. Supported keys: [ECDSA, RSA]")
+ 	}
+ }
+diff --git a/internal/github.com/hyperledger/fabric/bccsp/sw/new.go b/internal/github.com/hyperledger/fabric/bccsp/sw/new.go
+index ae2efd8..4e91550 100644
+--- a/internal/github.com/hyperledger/fabric/bccsp/sw/new.go
++++ b/internal/github.com/hyperledger/fabric/bccsp/sw/new.go
+@@ -97,6 +97,7 @@ func NewWithParams(securityLevel int, hashFamily string, keyStore bccsp.KeyStore
+ 	swbccsp.AddWrapper(reflect.TypeOf(&bccsp.ECDSAPrivateKeyImportOpts{}), &ecdsaPrivateKeyImportOptsKeyImporter{})
+ 	swbccsp.AddWrapper(reflect.TypeOf(&bccsp.ECDSAGoPublicKeyImportOpts{}), &ecdsaGoPublicKeyImportOptsKeyImporter{})
+ 	swbccsp.AddWrapper(reflect.TypeOf(&bccsp.X509PublicKeyImportOpts{}), &x509PublicKeyImportOptsKeyImporter{bccsp: swbccsp})
++	swbccsp.AddWrapper(reflect.TypeOf(&bccsp.RSA2048PrivateKeyImportOpts{}), &rsaPrivatekeyImportOptsKeyImporter{})
+ 
+ 	return swbccsp, nil
+ }
+diff --git a/internal/github.com/hyperledger/fabric/bccsp/sw/rsa.go b/internal/github.com/hyperledger/fabric/bccsp/sw/rsa.go
+new file mode 100644
+index 0000000..466da1e
+--- /dev/null
++++ b/internal/github.com/hyperledger/fabric/bccsp/sw/rsa.go
+@@ -0,0 +1,72 @@
++/*
++Copyright IBM Corp. 2017 All Rights Reserved.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++		 http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++
++package sw
++
++import (
++	"crypto"
++	"crypto/rand"
++	"crypto/rsa"
++	"fmt"
++
++	"github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric/bccsp"
++)
++
++type rsaSigner struct{}
++
++func (s *rsaSigner) Sign(k bccsp.Key, digest []byte, opts bccsp.SignerOpts) ([]byte, error) {
++	if opts == nil {
++		opts = &rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthEqualsHash, Hash: crypto.SHA256}
++	}
++
++	return k.(*rsaPrivateKey).privKey.Sign(rand.Reader, digest, opts)
++}
++
++type rsaPrivateKeyVerifier struct{}
++
++func (v *rsaPrivateKeyVerifier) Verify(k bccsp.Key, signature, digest []byte, opts bccsp.SignerOpts) (bool, error) {
++	if opts == nil {
++		opts = &rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthEqualsHash, Hash: crypto.SHA256}
++	}
++	switch opts.(type) {
++	case *rsa.PSSOptions:
++		err := rsa.VerifyPSS(&(k.(*rsaPrivateKey).privKey.PublicKey),
++			(opts.(*rsa.PSSOptions)).Hash,
++			digest, signature, opts.(*rsa.PSSOptions))
++
++		return err == nil, err
++	default:
++		return false, fmt.Errorf("Opts type not recognized [%s]", opts)
++	}
++}
++
++type rsaPublicKeyKeyVerifier struct{}
++
++func (v *rsaPublicKeyKeyVerifier) Verify(k bccsp.Key, signature, digest []byte, opts bccsp.SignerOpts) (bool, error) {
++	if opts == nil {
++		opts = &rsa.PSSOptions{SaltLength: rsa.PSSSaltLengthEqualsHash, Hash: crypto.SHA256}
++	}
++	switch opts.(type) {
++	case *rsa.PSSOptions:
++		err := rsa.VerifyPSS(k.(*rsaPublicKey).pubKey,
++			(opts.(*rsa.PSSOptions)).Hash,
++			digest, signature, opts.(*rsa.PSSOptions))
++
++		return err == nil, err
++	default:
++		return false, fmt.Errorf("Opts type not recognized [%s]", opts)
++	}
++}
+diff --git a/internal/github.com/hyperledger/fabric/bccsp/sw/rsakey.go b/internal/github.com/hyperledger/fabric/bccsp/sw/rsakey.go
+new file mode 100644
+index 0000000..45160dd
+--- /dev/null
++++ b/internal/github.com/hyperledger/fabric/bccsp/sw/rsakey.go
+@@ -0,0 +1,133 @@
++/*
++Copyright IBM Corp. 2016 All Rights Reserved.
++
++Licensed under the Apache License, Version 2.0 (the "License");
++you may not use this file except in compliance with the License.
++You may obtain a copy of the License at
++
++		 http://www.apache.org/licenses/LICENSE-2.0
++
++Unless required by applicable law or agreed to in writing, software
++distributed under the License is distributed on an "AS IS" BASIS,
++WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++See the License for the specific language governing permissions and
++limitations under the License.
++*/
++package sw
++
++import (
++	"crypto/rsa"
++	"crypto/sha256"
++	"crypto/x509"
++	"encoding/asn1"
++	"errors"
++	"fmt"
++	"math/big"
++
++	"github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric/bccsp"
++)
++
++// rsaPublicKey reflects the ASN.1 structure of a PKCS#1 public key.
++type rsaPublicKeyASN struct {
++	N *big.Int
++	E int
++}
++
++type rsaPrivateKey struct {
++	privKey *rsa.PrivateKey
++}
++
++// Bytes converts this key to its byte representation,
++// if this operation is allowed.
++func (k *rsaPrivateKey) Bytes() ([]byte, error) {
++	return nil, errors.New("Not supported.")
++}
++
++// SKI returns the subject key identifier of this key.
++func (k *rsaPrivateKey) SKI() []byte {
++	if k.privKey == nil {
++		return nil
++	}
++
++	// Marshall the public key
++	raw, _ := asn1.Marshal(rsaPublicKeyASN{
++		N: k.privKey.N,
++		E: k.privKey.E,
++	})
++
++	// Hash it
++	hash := sha256.New()
++	hash.Write(raw)
++	return hash.Sum(nil)
++}
++
++// Symmetric returns true if this key is a symmetric key,
++// false is this key is asymmetric
++func (k *rsaPrivateKey) Symmetric() bool {
++	return false
++}
++
++// Private returns true if this key is an asymmetric private key,
++// false otherwise.
++func (k *rsaPrivateKey) Private() bool {
++	return true
++}
++
++// PublicKey returns the corresponding public key part of an asymmetric public/private key pair.
++// This method returns an error in symmetric key schemes.
++func (k *rsaPrivateKey) PublicKey() (bccsp.Key, error) {
++	return &rsaPublicKey{&k.privKey.PublicKey}, nil
++}
++
++type rsaPublicKey struct {
++	pubKey *rsa.PublicKey
++}
++
++// Bytes converts this key to its byte representation,
++// if this operation is allowed.
++func (k *rsaPublicKey) Bytes() (raw []byte, err error) {
++	if k.pubKey == nil {
++		return nil, errors.New("Failed marshalling key. Key is nil.")
++	}
++	raw, err = x509.MarshalPKIXPublicKey(k.pubKey)
++	if err != nil {
++		return nil, fmt.Errorf("Failed marshalling key [%s]", err)
++	}
++	return
++}
++
++// SKI returns the subject key identifier of this key.
++func (k *rsaPublicKey) SKI() []byte {
++	if k.pubKey == nil {
++		return nil
++	}
++
++	// Marshall the public key
++	raw, _ := asn1.Marshal(rsaPublicKeyASN{
++		N: k.pubKey.N,
++		E: k.pubKey.E,
++	})
++
++	// Hash it
++	hash := sha256.New()
++	hash.Write(raw)
++	return hash.Sum(nil)
++}
++
++// Symmetric returns true if this key is a symmetric key,
++// false is this key is asymmetric
++func (k *rsaPublicKey) Symmetric() bool {
++	return false
++}
++
++// Private returns true if this key is an asymmetric private key,
++// false otherwise.
++func (k *rsaPublicKey) Private() bool {
++	return false
++}
++
++// PublicKey returns the corresponding public key part of an asymmetric public/private key pair.
++// This method returns an error in symmetric key schemes.
++func (k *rsaPublicKey) PublicKey() (bccsp.Key, error) {
++	return k, nil
++}
+diff --git a/internal/github.com/hyperledger/fabric/bccsp/utils/keys.go b/internal/github.com/hyperledger/fabric/bccsp/utils/keys.go
+index 01bd125..1686f2b 100644
+--- a/internal/github.com/hyperledger/fabric/bccsp/utils/keys.go
++++ b/internal/github.com/hyperledger/fabric/bccsp/utils/keys.go
+@@ -14,6 +14,7 @@ import (
+ 	"crypto/ecdsa"
+ 	"crypto/elliptic"
+ 	"crypto/rand"
++	"crypto/rsa"
+ 	"crypto/x509"
+ 	"encoding/asn1"
+ 	"encoding/pem"
+@@ -67,6 +68,13 @@ func PrivateKeyToDER(privateKey *ecdsa.PrivateKey) ([]byte, error) {
+ 	return x509.MarshalECPrivateKey(privateKey)
+ }
+ 
++func RsaPrivateKeyToDER(privateKey *rsa.PrivateKey) ([]byte, error) {
++	if privateKey == nil {
++		return nil, errors.New("Invalid rsa private key. It must be different from nil.")
++	}
++	return x509.MarshalPKCS1PrivateKey(privateKey), nil
++}
++
+ // PrivateKeyToPEM converts the private key to PEM format.
+ // EC private keys are converted to PKCS#8 format.
+ func PrivateKeyToPEM(privateKey interface{}, pwd []byte) ([]byte, error) {
+diff --git a/pkg/msp/api/api.go b/pkg/msp/api/api.go
+index 9707c35..4996d9f 100644
+--- a/pkg/msp/api/api.go
++++ b/pkg/msp/api/api.go
+@@ -79,6 +79,16 @@ type EnrollmentRequest struct {
+ 	// The type of the enrollment request: x509 or idemix
+ 	// The default is a request for an X509 enrollment certificate
+ 	Type string
++	CSR  *CSRRequest
++}
++
++type CSRRequest struct {
++	KeyRequest *KeyRequest
++}
++
++type KeyRequest struct {
++	Algorithm string
++	Size      int
+ }
+ 
+ // ReenrollmentRequest is a request to reenroll an identity.
+@@ -95,6 +105,7 @@ type ReenrollmentRequest struct {
+ 	// AttrReqs are requests for attributes to add to the certificate.
+ 	// Each attribute is added only if the requestor owns the attribute.
+ 	AttrReqs []*AttributeRequest
++	CSR  *CSRRequest
+ }
+ 
+ // Attribute defines additional attributes that may be passed along during registration
+diff --git a/pkg/msp/fabcaadapter.go b/pkg/msp/fabcaadapter.go
+index 13fe5fc..34e8371 100644
+--- a/pkg/msp/fabcaadapter.go
++++ b/pkg/msp/fabcaadapter.go
+@@ -58,6 +58,13 @@ func (c *fabricCAAdapter) Enroll(request *api.EnrollmentRequest) ([]byte, error)
+ 		Label:   request.Label,
+ 	}
+ 
++	if request.CSR != nil && request.CSR.KeyRequest != nil {
++		careq.CSR = new(caapi.CSRInfo)
++		careq.CSR.KeyRequest = new(caapi.BasicKeyRequest)
++		careq.CSR.KeyRequest.Algo = request.CSR.KeyRequest.Algorithm
++		careq.CSR.KeyRequest.Size = request.CSR.KeyRequest.Size
++	}
++
+ 	if len(request.AttrReqs) > 0 {
+ 		attrs := make([]*caapi.AttributeRequest, len(request.AttrReqs))
+ 		for i, a := range request.AttrReqs {
+@@ -83,6 +90,12 @@ func (c *fabricCAAdapter) Reenroll(key core.Key, cert []byte, request *api.Reenr
+ 		Profile: request.Profile,
+ 		Label:   request.Label,
+ 	}
++	if request.CSR != nil && request.CSR.KeyRequest != nil {
++		careq.CSR = new(caapi.CSRInfo)
++		careq.CSR.KeyRequest = new(caapi.BasicKeyRequest)
++		careq.CSR.KeyRequest.Algo = request.CSR.KeyRequest.Algorithm
++		careq.CSR.KeyRequest.Size = request.CSR.KeyRequest.Size
++	}
+ 	if len(request.AttrReqs) > 0 {
+ 		attrs := make([]*caapi.AttributeRequest, len(request.AttrReqs))
+ 		for i, a := range request.AttrReqs {
+-- 
+2.7.4
+
