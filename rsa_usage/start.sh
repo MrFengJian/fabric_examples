@@ -1,6 +1,7 @@
 #!/bin/bash
-
-export PATH=$PATH:/home/fengjj/1.3.0
+set -e
+BIN_PATH="/home/hadoop/go_work/src/github.com/hyperledger/fabric/release/linux-amd64/bin"
+export PATH=$PATH:$BIN_PATH
 
 CHANNEL_NAME="mychannel"
 
@@ -11,7 +12,7 @@ generateArtifacts(){
     echo "##### Generate certificates using cryptogen tool #########"
     echo "##########################################################"
     #using sm cryptogen or not
-    cryptogensm generate --config=./crypto-config.yaml
+    cryptogen generate --config=./crypto-config.yaml
     #cryptogen generate --config=./crypto-config.yaml
 
     echo "##########################################################"

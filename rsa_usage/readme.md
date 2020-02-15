@@ -1,0 +1,2 @@
+- 基于fabric 1.4.4版本修改
+- 使用时，需要重新编译peer、orderer、ca等所有相关镜像，可以在fabric下使用`make docker`直接生成所有镜像或者使用例子中的Dockerfile替换二进制生成镜像
