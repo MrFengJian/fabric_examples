@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-BIN_PATH="/home/hadoop/go_work/src/github.com/hyperledger/fabric/release/linux-amd64/bin"
+BIN_PATH="/home/fengjj/go_path/src/github.com/hyperledger/fabric/release/linux-amd64/bin"
 export PATH=$PATH:$BIN_PATH
 
 CHANNEL_NAME="mychannel"
