@@ -1,6 +1,9 @@
 #!/bin/bash
 
-export PATH=$PATH:/home/fengjj/1.3.0
+set -e
+
+BIN_PATH="/home/fengjj/go_path/src/github.com/hyperledger/fabric/release/linux-amd64/bin"
+export PATH=$PATH:$BIN_PATH
 
 CHANNEL_NAME="mychannel"
 
@@ -10,9 +13,7 @@ generateArtifacts(){
     echo "##########################################################"
     echo "##### Generate certificates using cryptogen tool #########"
     echo "##########################################################"
-    #using sm cryptogen or not
-    cryptogensm generate --pluginPath ./smPlugin.so --config=./crypto-config.yaml
-    #cryptogen generate --config=./crypto-config.yaml
+    cryptogen generate --config=./crypto-config.yaml
 
     echo "##########################################################"
     echo "#########  Generating Orderer Genesis block ##############"
