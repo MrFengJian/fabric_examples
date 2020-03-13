@@ -30,7 +30,7 @@ PeerOrgs:
   - Name: Org1
     Domain: org1.example.com
     EnableNodeOUs: true
-    Algorithm: RSA
+    Algorithm: RSA # 默认为ECDSA算法，通过这个参数指定为RSA算法
     # ---------------------------------------------------------------------------
     # "Specs"
     # ---------------------------------------------------------------------------

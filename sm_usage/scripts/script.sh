@@ -1,5 +1,7 @@
 #!/bin/bash
 
+set -e
+
 SDIR="$(dirname ${BASH_SOURCE[0]})"
 
 . ${SDIR}/utils.sh
