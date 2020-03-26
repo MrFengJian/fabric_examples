@@ -48,8 +48,8 @@ services:
         - ../crypto-config/peerOrganizations/org1.example.com/peers/peer0.org1.example.com/tls:/etc/hyperledger/fabric/tls
     expose:
       - 7051
-      - 7052
-      - 7053
+    ports:
+      - 7051:7051
 
   peer1.org1.example.com:
     container_name: peer1.org1.example.com
@@ -69,8 +69,8 @@ services:
         - ../crypto-config/peerOrganizations/org1.example.com/peers/peer1.org1.example.com/tls:/etc/hyperledger/fabric/tls
     expose:
       - 7051
-      - 7052
-      - 7053
+    ports:
+      - 8051:7051
 
   peer0.org2.example.com:
     container_name: peer0.org2.example.com
@@ -89,8 +89,8 @@ services:
         - ../crypto-config/peerOrganizations/org2.example.com/peers/peer0.org2.example.com/tls:/etc/hyperledger/fabric/tls
     expose:
       - 7051
-      - 7052
-      - 7053
+    ports:
+      - 9051:7051
 
   peer1.org2.example.com:
     container_name: peer1.org2.example.com
@@ -110,5 +110,5 @@ services:
         - ../crypto-config/peerOrganizations/org2.example.com/peers/peer1.org2.example.com/tls:/etc/hyperledger/fabric/tls
     expose:
       - 7051
-      - 7052
-      - 7053
+    ports:
+      - 10051:7051
