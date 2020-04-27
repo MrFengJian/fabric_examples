@@ -1,0 +1,19 @@
+{
+  "CC_SRC_PATH": "../artifacts",
+  "admins": [
+    {
+      "secret": "3jlLo14q",
+      "username": "admin"
+    }
+  ],
+  "blockListener": [],
+  "channels": [
+    "mychannel"
+  ],
+  "eventWaitTime": "30000",
+  "host": "localhost",
+  "jwt_expiretime": "36000000",
+  "keyValueStore": "../keyValueStore/fabric-client-kvs",
+  "port": "8084",
+  "thisorganization": "org1"
+}

@@ -1,0 +1,66 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: tools-org1-pv
+  labels:
+    app: tools-org1-pv
+spec:
+  storageClassName: standard
+  capacity:
+    storage: 500Mi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    path: /home/fengjj/fabric/artifacts/crypto-config/
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+ namespace: org1
+ name: tools-pvc
+spec:
+ accessModes:
+   - ReadWriteMany
+ resources:
+   requests:
+     storage: 10Mi
+ selector:
+   matchLabels:
+     app: tools-org1-pv
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: org1
+  name: tools
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hyperledger
+      chain: demo
+      org: org1
+      peer-id: tools
+      role: peer
+  template:
+    metadata:
+      labels:
+        app: hyperledger
+        role: peer
+        org: org1
+        peer-id: tools
+        chain: demo
+    spec:
+      containers:
+      - name: tools
+        image: hyperledger/fabric-tools:1.4.3
+        command: ["sleep","360000"]
+        volumeMounts:
+         - mountPath: /var/hyperledger/fabric/
+           name: certificate
+      volumes:
+       - name: certificate
+         persistentVolumeClaim:
+           claimName: tools-pvc

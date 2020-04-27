@@ -1,0 +1,322 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: peer0-org1-pv
+  labels:
+    app: peer0-org1-pv
+spec:
+  storageClassName: standard
+  capacity:
+    storage: 500Mi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    path: /home/fengjj/fabric/artifacts/crypto-config/peerOrganizations/org1/peers/peer0.org1/
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+ namespace: org1
+ name: peer0-pvc
+spec:
+ accessModes:
+   - ReadWriteMany
+ resources:
+   requests:
+     storage: 10Mi
+ selector:
+   matchLabels:
+     app: peer0-org1-pv
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: peer0-org1-data-pv
+  labels:
+    app: peer0-org1-data-pv
+spec:
+  storageClassName: standard
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    path: /home/fengjj/fabric/data/peer0-org1/data
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+ namespace: org1
+ name: peer0-data-pvc
+spec:
+ accessModes:
+   - ReadWriteMany
+ resources:
+   requests:
+     storage: 10Gi
+ selector:
+   matchLabels:
+     app: peer0-org1-data-pv
+
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: org1
+  name: peer0
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hyperledger
+      chain: demo
+      org: org1
+      peer-id: peer0
+      role: peer
+  template:
+    metadata:
+      labels:
+        app: hyperledger
+        role: peer
+        org: org1
+        peer-id: peer0
+        chain: demo
+    spec:
+      containers:
+      - name: peer
+        image: hyperledger/fabric-peer:1.4.3
+        env:
+        - name: CORE_VM_ENDPOINT
+          value: "unix:///host/var/run/docker.sock"
+        - name: FABRIC_LOGGING_SPEC
+          value: "DEBUG"
+        - name: CORE_PEER_TLS_ENABLED
+          value: "true"
+        - name: CORE_PEER_GOSSIP_USELEADERELECTION
+          value: "true"
+        - name: CORE_PEER_TLS_CERT_FILE
+          value: "/etc/hyperledger/fabric/tls/server.crt"
+        - name: CORE_PEER_TLS_KEY_FILE
+          value: "/etc/hyperledger/fabric/tls/server.key"
+        - name: CORE_PEER_TLS_ROOTCERT_FILE
+          value: "/etc/hyperledger/fabric/tls/ca.crt"
+        - name: CORE_PEER_ADDRESSAUTODETECT
+          value: "true"
+        - name: CORE_PEER_CHAINCODELISTENADDRESS
+          value: "0.0.0.0:7052"
+        - name: CORE_PEER_CHAINCODEADDRESS
+          value: "peer0.org1.svc.cluster.local:7052"
+        - name: CORE_VM_DOCKER_HOSTCONFIG_DNS # kubernetes 集群的dns服务地址
+          value: "10.96.0.10"
+        - name: CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE
+          value: host
+        - name: CORE_PEER_ID
+          value: peer0.org1
+        - name: CORE_PEER_ADDRESS
+          value: peer0.org1:7051
+        - name: CORE_PEER_GOSSIP_BOOTSTRAP
+          value: peer0.org1:7051
+        - name: CORE_PEER_GOSSIP_EXTERNALENDPOINT
+          value: peer0.org1:7051
+        - name: CORE_PEER_LOCALMSPID
+          value: org1
+        - name: CORE_PEER_MSPCONFIGPATH
+          value: "/etc/hyperledger/fabric/msp"
+        ports:
+         - containerPort: 7051
+        command: ["peer"]
+        args: ["node","start"]
+        volumeMounts:
+         - mountPath: /etc/hyperledger/fabric/msp
+           name: certificate
+           subPath: msp
+         - mountPath: /etc/hyperledger/fabric/tls
+           name: certificate
+           subPath: tls
+         - mountPath: /var/hyperledger/production
+           name: peerdata
+         - mountPath: /host/var/run/
+           name: run
+      volumes:
+       - name: certificate
+         persistentVolumeClaim:
+           claimName: peer0-pvc
+       - name: peerdata
+         persistentVolumeClaim:
+           claimName: peer0-data-pvc
+       - name: run
+         hostPath:
+           path: /var/run
+
+---
+# 这个服务时StatefulSet用于对集群外访问使用的
+apiVersion: v1
+kind: Service
+metadata:
+  name: peer0
+  namespace: org1
+spec:
+ selector:
+   app: hyperledger
+   role: peer
+   peer-id: peer0
+   org: org1
+   chain: demo
+ type: NodePort
+ ports:
+   - name: listen-endpoint
+     protocol: TCP
+     port: 7051
+     targetPort: 7051
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: ca-org1-pv
+  labels:
+    app: ca-org1-pv
+spec:
+  # 使用storageClassName、labels和容量与pvc匹配
+  storageClassName: standard
+  capacity:
+    storage: 500Mi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    path: /home/fengjj/fabric/artifacts/crypto-config/peerOrganizations/org1/ca
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+ namespace: org1
+ name: ca-org1-pvc
+spec:
+ accessModes:
+   - ReadWriteMany
+ volumeMode: Filesystem
+ resources:
+   requests:
+     storage: 500Mi
+ selector:
+   matchLabels:
+     app: ca-org1-pv
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: ca-org1-data-pv
+  labels:
+    app: ca-org1-data-pv
+spec:
+  storageClassName: standard
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    path: /home/fengjj/fabric/data/ca.org1/data
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+ namespace: org1
+ name: ca-org1-data-pvc
+spec:
+ accessModes:
+   - ReadWriteMany
+ resources:
+   requests:
+     storage: 10Gi
+ selector:
+   matchLabels:
+     app: ca-org1-data-pv
+
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: org1
+  name: ca
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hyperledger
+      chain: demo
+      role: ca
+      org: org1
+      name: ca
+  template:
+    metadata:
+      labels:
+       app: hyperledger
+       role: ca
+       org: org1
+       name: ca
+       chain: demo
+    spec:
+     containers:
+       - name: ca
+         image: hyperledger/fabric-ca:1.4.3
+         env:
+         - name: FABRIC_CA_HOME
+           value: /etc/hyperledger/fabric-ca-server
+         - name: FABRIC_CA_SERVER_CA_NAME
+           value: ca
+         - name: FABRIC_CA_SERVER_CA_CERTFILE
+           value: /etc/hyperledger/fabric-ca-server-config/ca.org1-cert.pem
+         - name: FABRIC_CA_SERVER_CA_KEYFILE
+           value: /etc/hyperledger/fabric-ca-server-config/0fbb8a2016162fa1b854c3e19b8f6a10c9134603c12a6ddddb14f2fd962892a7_sk
+         - name: FABRIC_CA_SERVER_TLS_ENABLED
+           value: "true"
+         - name: FABRIC_CA_SERVER_TLS_CERTFILE
+           value: /etc/hyperledger/fabric-ca-server-config/ca.org1-cert.pem
+         - name: FABRIC_CA_SERVER_TLS_KEYFILE
+           value: /etc/hyperledger/fabric-ca-server-config/0fbb8a2016162fa1b854c3e19b8f6a10c9134603c12a6ddddb14f2fd962892a7_sk
+         - name: GODEBUG
+           value: netdns=go
+         ports:
+          - containerPort: 7054
+         command: ["fabric-ca-server","start","-b","admin:adminpw"]
+         volumeMounts:
+          - mountPath: /etc/hyperledger/fabric-ca-server-config
+            name: certificate
+          - mountPath: /etc/hyperledger/fabric-ca-server
+            name: cadata
+     volumes:
+       - name: certificate
+         persistentVolumeClaim:
+            claimName: ca-org1-pvc
+       - name: cadata
+         persistentVolumeClaim:
+            claimName: ca-org1-data-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+   namespace: org1
+   name: ca
+spec:
+ selector:
+   app: hyperledger
+   role: ca
+   org: org1
+   name: ca
+   chain: demo
+ type: NodePort
+ ports:
+   - name: endpoint
+     protocol: TCP
+     port: 7054
+     targetPort: 7054
+---
+

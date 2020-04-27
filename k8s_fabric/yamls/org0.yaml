@@ -1,0 +1,158 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: orderer0-pv
+  labels:
+    app: orderer0-pv
+spec:
+  storageClassName: standard
+  capacity:
+    storage: 500Mi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    path: /home/fengjj/fabric/artifacts/crypto-config/ordererOrganizations/org0/orderers/orderer0.org0
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+ namespace: org0
+ name: orderer0-pvc
+spec:
+ accessModes:
+   - ReadWriteMany
+ resources:
+   requests:
+     storage: 10Mi
+ selector:
+   matchLabels:
+     app: orderer0-pv
+
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: orderer0-data-pv
+  labels:
+    app: orderer0-data-pv
+spec:
+  storageClassName: standard
+  capacity:
+    storage: 10Gi
+  accessModes:
+    - ReadWriteMany
+  hostPath:
+    path: /home/fengjj/fabric/data/orderer0.org0/data
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+ namespace: org0
+ name: orderer0-data-pvc
+spec:
+ accessModes:
+   - ReadWriteMany
+ resources:
+   requests:
+     storage: 10Gi
+ selector:
+   matchLabels:
+     app: orderer0-data-pv
+
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: org0
+  name: orderer0
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: hyperledger
+      chain: demo
+      org: org0
+      orderer-id: orderer0
+      role: orderer
+  template:
+    metadata:
+      labels:
+        app: hyperledger
+        role: orderer
+        org: org0
+        orderer-id: orderer0
+        chain: demo
+    spec:
+      containers:
+      - name: orderer0
+        image: hyperledger/fabric-orderer:1.4.3
+        env:
+        - name: ORDERER_GENERAL_LOGLEVEL
+          value: debug
+        - name: ORDERER_GENERAL_LISTENADDRESS
+          value: 0.0.0.0
+        - name: ORDERER_GENERAL_GENESISMETHOD
+          value: file
+        - name: ORDERER_GENERAL_GENESISFILE
+          value: /var/hyperledger/orderer/orderer.genesis.block
+        - name: ORDERER_GENERAL_LOCALMSPID
+          value: org0
+        - name: ORDERER_GENERAL_LOCALMSPDIR
+          value: /var/hyperledger/orderer/msp
+        - name: ORDERER_GENERAL_TLS_ENABLED
+          value: "true"
+        - name: ORDERER_GENERAL_TLS_PRIVATEKEY
+          value: /var/hyperledger/orderer/tls/server.key
+        - name: ORDERER_GENERAL_TLS_CERTIFICATE
+          value: /var/hyperledger/orderer/tls/server.crt
+        - name: ORDERER_GENERAL_TLS_ROOTCAS
+          value: '[/var/hyperledger/orderer/tls/ca.crt]'
+        - name: GODEBUG
+          value: netdns=go
+        workingDir: /opt/gopath/src/github.com/hyperledger/fabric
+        ports:
+         - containerPort: 7050
+        command: ["orderer"]
+        volumeMounts:
+         - mountPath: /var/hyperledger/orderer/msp
+           name: certificate
+           subPath: msp
+         - mountPath: /var/hyperledger/orderer/tls
+           name: certificate
+           subPath: tls
+         - mountPath: /var/hyperledger/orderer/orderer.genesis.block
+           name: certificate
+           subPath: genesis.block
+         - mountPath: /var/hyperledger/production
+           name: ordererdata
+      volumes:
+       - name: certificate
+         persistentVolumeClaim:
+             claimName: orderer0-pvc
+       - name: ordererdata
+         persistentVolumeClaim:
+             claimName: orderer0-data-pvc
+
+---
+# 使用这个服务作为StatefulSet的对外访问端口
+apiVersion: v1
+kind: Service
+metadata:
+  name: orderer0
+  namespace: org0
+spec:
+ selector:
+   app: hyperledger
+   role: orderer
+   orderer-id: orderer0
+   org: org0
+   chain: demo
+ type: NodePort
+ ports:
+   - name: listen-endpoint
+     protocol: TCP
+     port: 7050
+     targetPort: 7050

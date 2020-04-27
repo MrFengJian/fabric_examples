@@ -1,0 +1,29 @@
+OrdererOrgs:
+  - Name: org0
+    Domain: org0
+    CA:
+      Country: CN
+      Province: ShaanXi
+      Locality: Xi'An
+      Algorithm: ECDSA
+    Specs:
+
+      - CommonName: orderer0.org0
+
+
+PeerOrgs:
+
+    - Name: org1
+      Domain: org1
+      EnableNodeOUs: true
+      CA:
+        Country: CN
+        Province: ShaanXi
+        Locality: Xi'An
+        Algorithm: ECDSA
+      Specs:
+      
+        - CommonName: peer0.org1
+      
+      Users:
+        Count: 1
