@@ -1,6 +1,9 @@
 #!/bin/bash
 
+mkdir -p ./artifacts/
+
 rm -rf ./artifacts/*
+
 
 export PATH=$PATH:./bin
 

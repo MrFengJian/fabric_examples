@@ -1,4 +1,0 @@
-[33m2019-11-01 10:13:57.465 CST [main] InitCmd -> WARN 001[0m CORE_LOGGING_LEVEL is no longer supported, please use the FABRIC_LOGGING_SPEC environment variable
-[33m2019-11-01 10:13:57.470 CST [main] SetOrdererEnv -> WARN 002[0m CORE_LOGGING_LEVEL is no longer supported, please use the FABRIC_LOGGING_SPEC environment variable
-[34m2019-11-01 10:13:57.478 CST [channelCmd] InitCmdFactory -> INFO 003[0m Endorser and orderer connections initialized
-[34m2019-11-01 10:13:57.488 CST [cli.common] readBlock -> INFO 004[0m Received block: 0
